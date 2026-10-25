@@ -12,7 +12,7 @@ const ROOT = path.join(__dirname, '..');
 
 function makeRepo(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cheerbook-site-'));
-  for (const dir of ['spec', 'site']) fs.cpSync(path.join(ROOT, dir), path.join(root, dir), { recursive: true });
+  for (const dir of ['spec', 'site', 'lib']) fs.cpSync(path.join(ROOT, dir), path.join(root, dir), { recursive: true });
   fs.mkdirSync(path.join(root, 'cheers'));
   for (const [file, content] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -153,4 +153,38 @@ test('a symbolic link anywhere among the copied files stops the build', () => {
 test('a library with problems lists them in the build error', () => {
   const root = makeRepo({ 'cheers/loose.cheer.json': chart({ title: '合成曲目', artist: '合成组合', duration: 180 }, '甲') });
   assert.throws(() => buildSite(root, path.join(root, '_site')), /网站没有生成：\ncheers\/loose\.cheer\.json：/);
+});
+
+test('the editor page loads only its own module script and stylesheet, under its own CSP', () => {
+  const root = makeRepo({});
+  const out = path.join(root, '_site');
+  buildSite(root, out);
+  const page = fs.readFileSync(path.join(out, 'editor', 'index.html'), 'utf8');
+  assert.deepEqual(page.match(/<script[^>]*>/g), ['<script type="module" src="/editor/app.js">']);
+  assert.match(page, /<link rel="stylesheet" href="\/editor\/editor.css">/);
+  assert.doesNotMatch(page, /<style|\sstyle=|\son[a-z]+=/i);
+  for (const file of ['app.js', 'dom.js', 'analysis-worker.js', 'editor.css', 'lib.js']) assert.ok(fs.existsSync(path.join(out, 'editor', file)), file);
+  assert.ok(!fs.existsSync(path.join(out, 'editor', 'page.html')));
+  const headers = fs.readFileSync(path.join(out, '_headers'), 'utf8');
+  assert.match(headers, /\n\/editor\/\*\n {2}! Content-Security-Policy\n {2}Content-Security-Policy: [^\n]*media-src blob:; worker-src 'self'; connect-src 'self' https:\/\/lrclib\.net;/);
+});
+
+test('the browser bundle holds every pure lib module and none that touch the file system', async () => {
+  const root = makeRepo({});
+  const out = path.join(root, '_site');
+  buildSite(root, out);
+  const bundle = fs.readFileSync(path.join(out, 'editor', 'lib.js'), 'utf8');
+  assert.doesNotMatch(bundle, /require\(['"]node:|require\(['"]fs['"]\)/);
+  const names = fs.readdirSync(path.join(ROOT, 'lib')).filter(file => file.endsWith('.js') && file !== 'library.js').map(file => file.slice(0, -3));
+  for (const name of names) assert.match(bundle, new RegExp(`^${JSON.stringify(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: function \\(module, exports, require\\) \\{$`, 'm'), name);
+  const lib = (await import('data:text/javascript;base64,' + Buffer.from(bundle).toString('base64'))).default;
+  assert.equal(typeof lib.cheer.parse, 'function');
+  assert.equal(lib.paths.folderName('A/B'), 'A_B');
+  assert.match(lib.messages.issueMessage({ code: 'songTitle', path: 'song.title' }), /缺少歌名/);
+});
+
+test('a lib module that requires something outside the bundle stops the build', () => {
+  const root = makeRepo({});
+  fs.writeFileSync(path.join(root, 'lib', 'leaky.js'), "'use strict';\nmodule.exports = require('node:fs');\n");
+  assert.throws(() => buildSite(root, path.join(root, '_site')), /lib\/leaky\.js 引用了包外的模块/);
 });

@@ -9,6 +9,7 @@
   --accent: #C4006D;
   --accent-soft: #FCE6F1;
   --focus: #0A64D6;
+  --on-accent: #FFFFFF;
   --radius: 14px;
   --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -23,6 +24,7 @@
     --accent: #FF6FB1;
     --accent-soft: #3A1B2B;
     --focus: #6AA8FF;
+    --on-accent: #1C1B22;
   }
 }
 * { box-sizing: border-box; }
@@ -100,3 +102,7 @@ footer.site p { margin: 4px 0; }
   nav.site { margin-left: 0; }
   .actions { margin-left: 0; }
 }
+.wrap.wide { max-width: 1440px; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 18px 0 0; }
+a.button { display: inline-block; background: var(--accent); color: var(--on-accent); text-decoration: none; border-radius: 10px; padding: 8px 16px; font-weight: 600; }
+a.button:hover { filter: brightness(1.08); }

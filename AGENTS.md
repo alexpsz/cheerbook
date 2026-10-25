@@ -39,6 +39,7 @@
 - CI 从基准分支取检查代码，把 Pull Request 的文件当数据检查；检查输出里来自投稿者的文字一律转义，不能形成工作流命令。
 - 不引入依赖；确需引入时先说明原因。只写 Node.js 22 可运行的代码。
 - 检查给投稿者看的消息用简体中文、写明文件与改法。
+- 网页编辑器（`/editor/`）的规则都在 `lib/` 的纯模块里（`editor`、`suggest`、`lyrics`、`beat`、`messages`、`paths`，不用 Node API），构建时打成 `/editor/lib.js`；`site/editor/` 只负责把它们接到页面上。编辑与推荐规则与映场 Swift 一致，改动时两边同步。
 - 网站由 `node tools/build-site.js` 生成到 `_site/`（不入库），Cloudflare Pages 在 `main` 更新后自动构建；页面中来自投稿的文字一律转义，不写内联脚本或样式（`_headers` 的 CSP 禁止）。
 
 ## Git

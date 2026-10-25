@@ -30,8 +30,8 @@ const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 /** Seconds as m:ss, the way players show a song's length. */
 const clock = seconds => { const total = Math.round(seconds); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`; };
 
-function layout({ title, description, current, body }) {
-  const nav = [['/', '浏览应援', 'home'], ['/mix', '通用 MIX', 'mix'], [REPO + '/blob/main/CONTRIBUTING.md', '投稿', ''], [REPO, 'GitHub', '']];
+function layout({ title, description, current, body, scripts = [{ src: '/app.js' }], styles = [], wide = false }) {
+  const nav = [['/', '浏览应援', 'home'], ['/editor/', '制作应援', 'editor'], ['/mix', '通用 MIX', 'mix'], [REPO + '/blob/main/CONTRIBUTING.md', '投稿', ''], [REPO, 'GitHub', '']];
   return `<!doctype html>
 <html lang="zh-Hans">
 <head>
@@ -42,7 +42,8 @@ function layout({ title, description, current, body }) {
 <meta name="description" content="${escapeHTML(description)}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
-<script src="/app.js" defer></script>
+${styles.map(sheet => `<link rel="stylesheet" href="${escapeHTML(sheet)}">`).join('\n')}
+${scripts.map(script => script.module ? `<script type="module" src="${escapeHTML(script.src)}"></script>` : `<script src="${escapeHTML(script.src)}" defer></script>`).join('\n')}
 </head>
 <body>
 <a class="skip" href="#main">跳到正文</a>
@@ -50,7 +51,7 @@ function layout({ title, description, current, body }) {
 <a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">CheerBook 应援本</a>
 <nav class="site" aria-label="主导航">${nav.map(([link, label, key]) => `<a href="${escapeHTML(link)}"${key && key === current ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>
 </div></header>
-<main id="main"><div class="wrap">
+<main id="main"><div class="wrap${wide ? ' wide' : ''}">
 ${body}
 </div></main>
 <footer class="site"><div class="wrap">
@@ -87,7 +88,7 @@ ${[...artists.values()].map(artist => `<div class="artist" data-artist><h3>${use
 ${[...artist.songs.values()].map(song => {
     const search = plainUserText([artist.name, song.title, ...song.files.flatMap(entry => entry.authors)].join(' '));
     return `<li class="song card" data-search="${escapeHTML(search)}"><h4>${userText(song.title)}</h4><ul class="files">
-${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</span><span class="meta">${escapeHTML(PERMISSIONS[entry.permission] || entry.permission)} · ${escapeHTML(licenseLabel(entry))} · ${entry.events} 处标记 · 时长 ${clock(entry.song.duration)}</span><span class="actions"><a href="${href(entry.path)}" download>下载</a><a href="${REPO}/blob/main/${entry.path.split('/').map(encodeURIComponent).join('/')}">GitHub</a></span></li>`).join('\n')}
+${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</span><span class="meta">${escapeHTML(PERMISSIONS[entry.permission] || entry.permission)} · ${escapeHTML(licenseLabel(entry))} · ${entry.events} 处标记 · 时长 ${clock(entry.song.duration)}</span><span class="actions"><a href="/editor/?cheer=${encodeURIComponent(href(entry.path))}">在网页中播放</a><a href="${href(entry.path)}" download>下载</a><a href="${REPO}/blob/main/${entry.path.split('/').map(encodeURIComponent).join('/')}">GitHub</a></span></li>`).join('\n')}
 </ul></li>`;
   }).join('\n')}
 </ul></div>`).join('\n')}`;
@@ -99,12 +100,14 @@ ${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</spa
 <li><strong>${songCount}</strong><span>首歌</span></li>
 <li><strong>${library.entries.length}</strong><span>条通用 MIX</span></li>
 </ul>
+<p class="cta"><a class="button" href="/editor/">在网页上制作应援</a><span class="meta">选一首本地歌曲，边听边点；音频不会上传。</span></p>
 </div>
 <section aria-labelledby="browse"><h2 id="browse">浏览应援</h2>
 ${browse}
 </section>
 <section aria-labelledby="use"><h2 id="use">怎样使用</h2>
 <div class="grid">
+<div class="card"><h3>在网页上</h3><ol class="steps"><li>打开<a href="/editor/">制作应援</a>，选择本地音频。</li><li>加载歌词，按住成员按钮或数字键边听边点，或从通用 MIX 一点插入。</li><li>保存到本机，或直接投稿到 CheerBook。</li></ol></div>
 <div class="card"><h3>在映场中</h3><ol class="steps"><li>下载这首歌的 <code>.cheer.json</code>。</li><li>在<a href="${LIVEGLOW}">映场</a>“正在播放”侧栏的“应援”标签点“导入…”。</li><li>播放到匹配的录音时，MIX 与 call 会跟着歌词出现。</li></ol></div>
 <div class="card"><h3>投稿</h3><p>只收自己听写打轴、或有开放许可 / 原作者同意的时间轴，不能有歌词原文。按<a href="${REPO}/blob/main/CONTRIBUTING.md">投稿指南</a>在 GitHub 上发起 Pull Request，检查会自动运行。</p></div>
 <div class="card"><h3>给开发者</h3><p>格式说明见 <a href="${REPO}/blob/main/spec/README.md">spec/README.md</a>；机器可读的 <a href="/index.json">index.json</a>、<a href="/spec/cheer.schema.json">JSON Schema</a> 与 <a href="/spec/mix-library.json">MIX 库</a>都可以直接获取。</p></div>
@@ -144,8 +147,52 @@ function notFoundPage() {
   return layout({ title: '没有这个页面 · CheerBook 应援本', description: '没有这个页面。', current: '', body });
 }
 
+function editorPage(markup) {
+  return layout({
+    title: '制作应援 · CheerBook 应援本', current: 'editor', body: markup, wide: true,
+    description: '在浏览器里边听本地歌曲边打应援：歌词卷轴、应援棒打点、通用 MIX、节拍分析与智能推荐，即时检查格式；音频不会上传。',
+    scripts: [{ src: '/editor/app.js', module: true }], styles: ['/editor/editor.css'],
+  });
+}
+
+// The browser bundle of the pure modules in lib/ (no file system), so the web editor runs the
+// same reader, rules and analysis as the command-line checks. Each file becomes a function in
+// one ES module; `require('./x')` between them resolves inside the bundle and nowhere else.
+const BROWSER_EXCLUDED = new Set(['library.js']);
+function bundleLib(read, files) {
+  const names = files.filter(file => file.endsWith('.js') && !BROWSER_EXCLUDED.has(file)).sort().map(file => file.slice(0, -3));
+  const parts = names.map(name => {
+    const source = read('lib/' + name + '.js').toString('utf8');
+    if (/require\(\s*['"](?!\.\/)/.test(source)) throw new Error(`lib/${name}.js 引用了包外的模块，不能放进浏览器包。`);
+    return `${JSON.stringify(name)}: function (module, exports, require) {\n${source}\n}`;
+  });
+  return `// Generated by tools/build-site.js from lib/ (GPL-3.0-only); do not edit.
+const factories = {
+${parts.join(',\n')}
+};
+const cache = {};
+function load(name) {
+  if (cache[name]) return cache[name].exports;
+  const module = { exports: {} };
+  cache[name] = module;
+  factories[name](module, module.exports, request => {
+    const target = String(request).replace(/^\\.\\//, '').replace(/\\.js$/, '');
+    if (!Object.hasOwn(factories, target)) throw new Error('Not in the browser bundle: ' + request);
+    return load(target);
+  });
+  return module.exports;
+}
+const lib = {};
+for (const name of Object.keys(factories)) lib[name] = load(name);
+export default lib;
+`;
+}
+
 // Cloudflare Pages reads this file for response headers. Pages may only use this site's own
 // files; the data files may be fetched from anywhere, so other players and tools can read them.
+// The editor also plays the chosen audio file (blob: URLs), analyses it in a worker of this site,
+// reads this site's own data, and, only when the visitor asks, looks lyrics up on lrclib.net.
+const EDITOR_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src blob:; worker-src 'self'; connect-src 'self' https://lrclib.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const HEADERS = `/*
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
@@ -161,6 +208,10 @@ const HEADERS = `/*
 
 /spec/*
   Access-Control-Allow-Origin: *
+
+/editor/*
+  ! Content-Security-Policy
+  Content-Security-Policy: ${EDITOR_CSP}
 `;
 
 /** Writes the site into `output`, which must be missing, empty or an earlier build of this tool. */
@@ -187,6 +238,11 @@ function buildSite(root, output) {
   write('index.html', homePage(entries, library));
   write('mix.html', mixPage(library));
   write('404.html', notFoundPage());
+  write('editor/index.html', editorPage(read('site/editor/page.html').toString('utf8')));
+  write('editor/lib.js', bundleLib(read, fs.readdirSync(path.join(root, 'lib'))));
+  for (const entry of fs.readdirSync(path.join(root, 'site', 'editor'), { withFileTypes: true })) {
+    if (entry.name !== 'page.html') write('editor/' + entry.name, read('site/editor/' + entry.name));
+  }
   write('_headers', HEADERS);
   write('index.json', JSON.stringify(buildIndex(entries), null, 2) + '\n');
   for (const entry of entries) write(entry.path, read(entry.path));
@@ -210,4 +266,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { buildSite, escapeHTML, href, clock };
+module.exports = { buildSite, bundleLib, escapeHTML, href, clock, EDITOR_CSP };

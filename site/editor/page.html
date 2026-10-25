@@ -1,0 +1,161 @@
+<div class="editor" id="editor" data-mode="edit" data-ready="false">
+<noscript><p class="card">网页编辑器需要开启 JavaScript。</p></noscript>
+
+<section class="ed-toolbar" aria-label="工具栏">
+  <div class="ed-song">
+    <label class="ed-field"><span>歌名</span><input id="song-title" autocomplete="off" maxlength="200" placeholder="选择音频后自动填入"></label>
+    <label class="ed-field"><span>艺人</span><input id="song-artist" autocomplete="off" maxlength="200"></label>
+    <span id="song-duration" class="meta"></span>
+  </div>
+  <div class="ed-actions" role="toolbar" aria-label="操作">
+    <button type="button" id="pick-audio" class="primary">选择本地音频</button>
+    <input type="file" id="audio-file" accept="audio/*,.flac,.m4a,.ogg,.opus" class="visually-hidden" tabindex="-1">
+    <button type="button" id="open-lyrics">歌词…</button>
+    <button type="button" id="open-import">导入应援…</button>
+    <input type="file" id="cheer-file" accept=".json,application/json" class="visually-hidden" tabindex="-1">
+    <button type="button" id="suggest" aria-describedby="suggest-hint">✦ 推荐</button>
+    <button type="button" id="undo" aria-keyshortcuts="Control+Z Meta+Z">撤销</button>
+    <button type="button" id="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">重做</button>
+    <button type="button" id="open-more">更多…</button>
+    <button type="button" id="save-local">保存到本机</button>
+    <button type="button" id="open-share" class="primary">分享 / 投稿…</button>
+    <button type="button" id="toggle-mode" aria-pressed="false">观看模式</button>
+  </div>
+  <p id="status" class="ed-status" role="status" aria-live="polite"></p>
+  <p id="suggest-hint" class="visually-hidden">按歌词空位和节拍推荐 MIX，点一下才会采纳。</p>
+</section>
+
+<section class="ed-welcome card" id="welcome" aria-labelledby="welcome-title">
+  <h2 id="welcome-title">三步做一份应援</h2>
+  <ol class="steps">
+    <li><strong>选择本地音频</strong>：歌曲只在你的浏览器里播放和分析节拍，不会上传。</li>
+    <li><strong>加载歌词</strong>：导入或粘贴 LRC，或点“在线查找”从 LRCLIB 查询。歌词只用来对时间，不会写进应援文件。</li>
+    <li><strong>边听边点</strong>：按住成员按钮（或数字键 1–9）记录演唱段落，M / C / N 记录 MIX、call、提示；右侧 MIX 库一点就插入。</li>
+  </ol>
+  <p class="meta">草稿自动保存在这个浏览器里。做好后“保存到本机”，或“分享 / 投稿”到 CheerBook。</p>
+</section>
+
+<div class="ed-main">
+  <section class="ed-lyrics card" aria-labelledby="timeline-title">
+    <h2 id="timeline-title" class="visually-hidden">歌词与应援</h2>
+    <ol id="timeline" class="timeline" aria-label="歌词与应援，按时间排列"></ol>
+    <p id="timeline-empty" class="timeline-empty">还没有歌词。没有歌词也可以边听边点，应援会按时间列在这里。</p>
+  </section>
+
+  <aside class="ed-side" aria-label="侧栏">
+    <section class="card ed-panel" aria-labelledby="selected-title" id="selected-panel" hidden>
+      <h2 id="selected-title">这一条</h2>
+      <div id="selected-editor"></div>
+    </section>
+    <section class="card ed-panel" aria-labelledby="issues-title">
+      <h2 id="issues-title">即时检查</h2>
+      <p id="issues-summary" class="visually-hidden" role="status" aria-live="polite"></p>
+      <ul id="issues" class="issues"></ul>
+    </section>
+    <section class="card ed-panel" aria-labelledby="members-title">
+      <h2 id="members-title">成员</h2>
+      <ul id="members" class="members"></ul>
+      <form id="add-member" class="add-member">
+        <label class="ed-field"><span>名字</span><input id="member-name" maxlength="32" autocomplete="off" required></label>
+        <label class="ed-field color"><span>应援色</span><input id="member-color" type="color" value="#e4007f"></label>
+        <button type="submit">添加</button>
+      </form>
+    </section>
+    <section class="card ed-panel" aria-labelledby="mix-title">
+      <h2 id="mix-title">通用 MIX</h2>
+      <p class="meta" id="mix-hint">点一下插入到当前位置；有节拍时对齐到下一拍。</p>
+      <ul id="mix-library" class="mix-list"></ul>
+    </section>
+  </aside>
+</div>
+
+<section class="ed-dock" aria-label="播放与打点">
+  <div id="band" class="band" aria-live="off"></div>
+  <div class="transport">
+    <button type="button" id="play" class="play" aria-keyshortcuts="Space" disabled>播放</button>
+    <span id="clock" class="clock">0:00.0 / 0:00</span>
+    <input type="range" id="seek" min="0" max="0" step="0.01" value="0" aria-label="播放位置" disabled>
+    <label class="ed-field rate"><span>速度</span>
+      <select id="rate"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option></select>
+    </label>
+    <span id="beat-dot" class="beat-dot" data-on="off" aria-hidden="true"></span>
+    <span id="grid-status" class="meta"></span>
+    <span class="grid-fix" role="group" aria-label="修正节拍">
+      <button type="button" id="grid-double" hidden title="速度翻倍">×2</button>
+      <button type="button" id="grid-half" hidden title="速度减半">÷2</button>
+      <button type="button" id="grid-shift" hidden title="小节线往后移一拍">移一拍</button>
+    </span>
+  </div>
+  <div id="sticks" class="sticks" role="toolbar" aria-label="打点：按住记录，松开结束"></div>
+</section>
+
+<dialog id="lyrics-dialog" aria-labelledby="lyrics-title">
+  <form method="dialog" class="dialog-body">
+    <h2 id="lyrics-title">歌词</h2>
+    <p class="meta">歌词只用来对时间和显示，不会写进应援文件，也不会上传。</p>
+    <label class="ed-field block"><span>粘贴 LRC 或纯文本</span><textarea id="lyrics-text" rows="10" spellcheck="false"></textarea></label>
+    <div class="dialog-row">
+      <button type="button" id="lyrics-file-button">导入 .lrc 文件…</button>
+      <input type="file" id="lyrics-file" accept=".lrc,.txt,text/plain" class="visually-hidden" tabindex="-1">
+      <button type="button" id="lyrics-online">在线查找</button>
+    </div>
+    <p class="meta" id="lyrics-online-note">“在线查找”会向 LRCLIB（lrclib.net，公开的歌词库）发送歌名、艺人和时长，不发送音频或应援内容；和访问任何网站一样，对方能看到你的网络地址。</p>
+    <p id="lyrics-result" role="status" aria-live="polite"></p>
+    <div class="dialog-row end">
+      <button type="button" data-close>取消</button>
+      <button value="apply" id="lyrics-apply" class="primary">使用这些歌词</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="more-dialog" aria-labelledby="more-title">
+  <form method="dialog" class="dialog-body">
+    <h2 id="more-title">更多</h2>
+    <label class="ed-field"><span>反应补偿（秒，0–0.5）</span><input id="compensation" type="number" min="0" max="0.5" step="0.01"></label>
+    <p class="meta">按键总会比听到的晚一点，记录时自动往前移这么多。可以用下面的“校准”测一测。</p>
+    <div class="dialog-row"><button type="button" id="calibrate">校准反应时间…</button><span id="calibrate-result" class="meta"></span></div>
+    <label class="ed-field"><span>整体偏移（秒，−10–10，正值让应援提前）</span><input id="offset" type="number" min="-10" max="10" step="0.05"></label>
+    <div class="dialog-row">
+      <button type="button" id="tap-tempo">跟拍 8 下估速度</button>
+      <button type="button" id="sort-events">按时间排序</button>
+    </div>
+    <details>
+      <summary>歌曲信息</summary>
+      <label class="ed-field"><span>专辑</span><input id="song-album" maxlength="200"></label>
+      <label class="ed-field"><span>ISRC</span><input id="song-isrc" maxlength="20" autocomplete="off"></label>
+      <label class="ed-field"><span>Apple Music 编号</span><input id="song-amid" maxlength="20" inputmode="numeric" autocomplete="off"></label>
+    </details>
+    <div class="dialog-row">
+      <button type="button" id="new-chart" class="danger">新建空白应援…</button>
+    </div>
+    <div class="dialog-row end"><button value="close" class="primary">完成</button></div>
+  </form>
+</dialog>
+
+<dialog id="share-dialog" aria-labelledby="share-title">
+  <form method="dialog" class="dialog-body">
+    <h2 id="share-title">分享 / 投稿</h2>
+    <label class="ed-field"><span>作者名（可以用昵称）</span><input id="share-author" maxlength="64" autocomplete="nickname"></label>
+    <fieldset class="ed-choice">
+      <legend>这份应援是</legend>
+      <label><input type="radio" name="origin" value="self" checked> 自己边听边点的</label>
+      <label><input type="radio" name="origin" value="referenced"> 参考了别人的版本</label>
+    </fieldset>
+    <div id="share-referenced" hidden>
+      <label class="ed-field block"><span>参考的链接</span><input id="share-link" type="url" placeholder="https://"></label>
+      <fieldset class="ed-choice">
+        <legend>原作者同意转载吗？</legend>
+        <label><input type="radio" name="consent" value="yes"> 是</label>
+        <label><input type="radio" name="consent" value="unsure" checked> 不确定</label>
+      </fieldset>
+    </div>
+    <label class="check" id="share-confirm-row" hidden><input type="checkbox" id="share-confirm"> 没有歌词可核对；我确认文件里没有歌词原文</label>
+    <p id="share-outcome" class="share-outcome" role="status" aria-live="polite"></p>
+    <div class="dialog-row end">
+      <button type="button" data-close>取消</button>
+      <button type="button" id="share-download">下载分享文件</button>
+      <button type="button" id="share-submit" class="primary">投稿到 CheerBook…</button>
+    </div>
+  </form>
+</dialog>
+</div>

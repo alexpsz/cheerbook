@@ -1,0 +1,127 @@
+# Merges a pull request without waiting for review when its author only modifies or removes files
+# that the same GitHub account contributed before (C-011, lib/contributors.js). New contributions
+# and every other change still wait for the maintainer, who can always merge by hand.
+#
+# Runs after "检查" passes on a pull request. Nothing from the pull request is checked out or run:
+# the code, its history and contributors.json come from the default branch, and the pull request's
+# author, state and files are read from the API and handled as data (never put into a script).
+# Files whose records have not caught up with the default branch yet are left for review. The
+# files are listed for exactly the commit the check passed on, and the merge is pinned to that
+# commit, so a later push cannot slip in. Merges made with this workflow's token do not start other
+# workflows, so it starts "更新索引" itself afterwards.
+name: 自动合并
+
+on:
+  workflow_run:
+    workflows: [检查]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.path == '.github/workflows/check.yml'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: 取出默认分支
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: 找出投稿者记录还没跟上的文件
+        run: node tools/record-contributors.js --after HEAD --pending > "$RUNNER_TEMP/pending.json"
+      - name: 列出打开的 Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" > "$RUNNER_TEMP/open.json"
+      - name: 找到检查对应的 Pull Request
+        id: find
+        shell: node {0}
+        run: |
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { pullRequestForHead } = require(path.resolve('lib/contributors.js'));
+          const pages = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'open.json'), 'utf8'));
+          // The check's run, read as data: the pull request must come from the repository and branch it ran for.
+          const { workflow_run: run } = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const found = pullRequestForHead(pages.flat(), process.env.CHECKED_SHA, process.env.DEFAULT_BRANCH, run || null);
+          console.log(found.reason);
+          if (found.number) fs.appendFileSync(process.env.GITHUB_OUTPUT, `number=${found.number}\n`);
+      - name: 读取 Pull Request 与检查过的提交修改的文件
+        if: steps.find.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.find.outputs.number }}
+        run: |
+          if [[ ! "$NUMBER" =~ ^[1-9][0-9]*$ || ! "$CHECKED_SHA" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]]; then
+            echo "Pull Request 编号或提交编号的格式不对。"
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" > "$RUNNER_TEMP/pull.json"
+          gh api "repos/$GITHUB_REPOSITORY/compare/$DEFAULT_BRANCH...$CHECKED_SHA" > "$RUNNER_TEMP/compare.json"
+      - name: 判断能否自动合并
+        id: decide
+        if: steps.find.outputs.number != ''
+        env:
+          NUMBER: ${{ steps.find.outputs.number }}
+        shell: node {0}
+        run: |
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { quote, readContributors, autoMergeDecision } = require(path.resolve('lib/contributors.js'));
+          const read = name => JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, name), 'utf8'));
+          const number = Number(process.env.NUMBER);
+          let decision;
+          try {
+            const pull = read('pull.json');
+            const compare = read('compare.json');
+            const file = path.resolve('contributors.json');
+            const contributors = readContributors(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
+            if (pull.number !== number || pull.state !== 'open' || !pull.base || pull.base.ref !== process.env.DEFAULT_BRANCH) {
+              decision = { merge: false, reason: 'Pull Request 已关闭，或不是合并到默认分支，不自动合并。' };
+            } else {
+              decision = autoMergeDecision({
+                prAuthor: pull.user,
+                headOwner: pull.head && pull.head.repo ? pull.head.repo.owner : null,
+                files: compare.files,
+                contributors,
+                draft: pull.draft,
+                headSha: pull.head && pull.head.sha,
+                checkedSha: process.env.CHECKED_SHA,
+                changedFiles: pull.changed_files,
+                unrecordedPaths: read('pending.json'),
+              });
+            }
+          } catch (error) {
+            decision = { merge: false, reason: `无法判断（${quote(error.message)}），不自动合并。` };
+          }
+          console.log(`Pull Request #${number}：${decision.reason}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `merge=${decision.merge === true}\n`);
+      - name: 合并并更新索引
+        if: steps.decide.outputs.merge == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.find.outputs.number }}
+        run: |
+          if [[ ! "$NUMBER" =~ ^[1-9][0-9]*$ || ! "$CHECKED_SHA" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]]; then
+            echo "Pull Request 编号或提交编号的格式不对。"
+            exit 1
+          fi
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$NUMBER/merge" -f merge_method=squash -f sha="$CHECKED_SHA" --jq .message
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/index.yml/dispatches" -f ref="$DEFAULT_BRANCH"
+          echo "已合并 Pull Request #$NUMBER，并启动“更新索引”。"

@@ -5,7 +5,11 @@
 name: 检查
 
 on:
+  # Only pull requests into main: "自动合并" trusts a pass of this check, so a pass against another
+  # base must not count. A draft marked ready is checked again, so it can still merge on its own.
   pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 

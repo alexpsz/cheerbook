@@ -1,0 +1,113 @@
+/* CheerBook "制作 MIX" page. The site's colours and fonts (style.css) and the editor's controls
+   (editor.css, scoped to .editor); this file only lays the form out. */
+.mixform section { margin-top: 0; }
+.mixform h2 { font-size: 1.12rem; margin: 0 0 12px; }
+.mixform fieldset { min-width: 0; margin: 0; }
+.mixform input[type="checkbox"], .mixform input[type="radio"] { padding: 0; margin: 0; accent-color: var(--accent); width: 1.05em; height: 1.05em; flex: none; }
+.mixform code { overflow-wrap: anywhere; }
+.mixform[data-type="proposal"] [data-only="artist"], .mixform[data-type="artist"] [data-only="proposal"] { display: none !important; }
+
+.mf-head h1 { font-size: clamp(1.6rem, 4.5vw, 2.1rem); line-height: 1.25; margin: 0 0 6px; }
+.mf-head p { margin: 0; }
+.mf-links { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 0.92rem; margin-bottom: 6px; }
+
+/* The two kinds, as two cards; the whole card picks its radio. */
+.mf-types { border: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.mf-types legend { font-weight: 700; padding: 0; margin-bottom: 8px; }
+.mf-type { position: relative; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 12px 40px; background: var(--bg); }
+.mf-type input { position: absolute; left: 14px; top: 16px; }
+.mf-type label { font-weight: 700; cursor: pointer; }
+.mf-type label::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.mf-type p { margin: 2px 0 0; font-size: 0.88rem; }
+.mf-type:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.mf-type:has(input:checked) p { color: var(--text); }
+.mf-type:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+.mf-type input:focus-visible { outline: none; }
+.mf-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; }
+.mf-tools .meta { font-size: 0.85rem; }
+.mf-editing { margin: 10px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--accent-soft); overflow-wrap: anywhere; font-size: 0.92rem; }
+.mf-start .ed-status { margin-top: 8px; overflow-wrap: anywhere; }
+
+/* Form beside the output on wide screens; one column below 880px. */
+.mf-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 22rem); gap: 16px; align-items: start; }
+.mf-form { display: grid; gap: 16px; min-width: 0; }
+.mf-section { display: grid; gap: 14px; min-width: 0; }
+.mf-section h2 { margin: 0; }
+.mf-output { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 10px; min-width: 0; }
+.mf-output h2 { margin: 0; }
+@media (max-width: 880px) {
+  .mf-layout { grid-template-columns: minmax(0, 1fr); }
+  .mf-output { position: static; max-height: none; overflow: visible; }
+}
+
+.mf-group { display: grid; gap: 4px; min-width: 0; }
+.mf-group > label, .mf-pair > label { font-weight: 600; font-size: 0.92rem; }
+.mf-group > input, .mf-pair > input, .mf-pair > select { width: 100%; min-width: 0; }
+.mf-fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px 12px; }
+.mf-fieldset legend { font-weight: 600; font-size: 0.92rem; padding: 0 4px; }
+.mf-hint { margin: 0; color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.mf-choices { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.mf-choices label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.mf-error { display: grid; gap: 2px; color: var(--record); font-size: 0.88rem; border-left: 3px solid var(--record); padding-left: 8px; overflow-wrap: anywhere; }
+.mf-error p { margin: 0; }
+.mixform [aria-invalid="true"] { border-color: var(--record); }
+.mixform input[type="checkbox"][aria-invalid="true"], .mixform input[type="radio"][aria-invalid="true"] { outline: 2px solid var(--record); outline-offset: 1px; }
+
+.mf-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mf-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mf-line input { flex: 1 1 12em; min-width: 0; }
+.mf-line button { flex: none; }
+.mf-author input[data-part="name"] { flex: 1 1 8em; }
+.mf-author input[data-part="url"] { flex: 2 1 12em; }
+.mf-bars { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.mf-bars input { width: 5.5em; }
+.mf-credits { gap: 12px; }
+.mf-pair { display: grid; gap: 4px; }
+
+/* Readings: one row per word; the table scrolls inside itself when the screen is narrow. */
+.mf-table-wrap { overflow-x: auto; max-width: 100%; }
+.mf-table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+.mf-table th, .mf-table td { padding: 3px 8px 3px 0; text-align: left; vertical-align: middle; }
+.mf-table thead th { color: var(--muted); font-weight: 600; font-size: 0.82rem; }
+.mf-table tbody th { font-weight: 600; }
+.mf-word { display: block; min-width: 4.5em; max-width: 9em; overflow-wrap: anywhere; line-height: 1.35; }
+.mf-table input { width: 100%; min-width: 5em; }
+
+/* Output: problems, preview, actions, file text. */
+.mf-summary { border-radius: 10px; padding: 8px 10px; background: var(--bg); border-left: 3px solid var(--record); font-size: 0.9rem; overflow-wrap: anywhere; }
+.mf-summary.ok { border-left-color: var(--accent); }
+.mf-summary p { margin: 0; }
+.mf-summary .mf-summary-title { font-weight: 700; }
+.mf-summary ul { margin: 4px 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.mf-summary .mf-hint { margin-top: 6px; }
+.mixform .mf-jump { margin-left: 6px; padding: 0 8px; font-size: 0.8rem; border-radius: 6px; }
+.mf-subtitle { display: block; font-size: 0.95rem; font-weight: 700; margin: 6px 0 0; }
+.mf-preview { display: grid; gap: 8px; min-width: 0; }
+.mf-preview-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.mf-preview-name { font-weight: 700; overflow-wrap: anywhere; }
+.mf-band { min-height: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.mf-band .item { align-items: flex-start; }
+.mf-band .item > .kind { align-self: center; }
+.mf-band .item .w { color: var(--text); white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+.mf-band .item .w > span { margin: 0; }
+.mf-band .item .w .kana, .mf-band .item .w .romaji { min-height: 1.2em; color: var(--muted); }
+.mf-slot { border-bottom: 1px dashed currentColor; color: var(--accent); font-weight: 400; }
+.mf-preview-romaji { margin: 0; color: var(--muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+.mf-facts { font-size: 0.88rem; }
+.mf-facts dd { overflow-wrap: anywhere; }
+.mf-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.mf-note { margin: 0; color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.mixform .mf-file { width: 100%; min-height: 12em; font-family: var(--mono); font-size: 0.78rem; line-height: 1.5; white-space: pre; overflow: auto; resize: vertical; background: var(--bg); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .mf-type { transition: border-color 0.15s ease-out, background-color 0.15s ease-out; }
+}
+@media (prefers-contrast: more) {
+  .mf-type, .mf-fieldset, .mf-band { border-color: var(--text); }
+  .mf-hint, .mf-note { color: var(--text); }
+}
+@media (max-width: 600px) {
+  .mixform .card { padding: 14px 14px; }
+  .mf-fieldset { padding: 4px 10px 10px; }
+  .mf-band { font-size: 1.05rem; }
+}

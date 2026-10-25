@@ -6,7 +6,7 @@
 import lib from '/editor/lib.js';
 import { h, clear, formatTime, formatClock, debounce, download, storage, typingTarget } from '/editor/dom.js';
 
-const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P, lyricsview: V } = lib;
+const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P, lyricsview: V, mixes: MX } = lib;
 
 const DRAFT_KEY = 'cheerbook.editor.draft.v1';
 const REPO = 'https://github.com/alexpsz/cheerbook';
@@ -19,6 +19,10 @@ audio.preload = 'auto';
 const state = {
   ed: null,
   library: null,
+  // Every artist MIX on the site (/mix/artists.json); the ones for this song come first in the MIX list.
+  artistMixes: null,
+  // The repository path of the community file this chart was opened from, so it can be edited in place.
+  sourcePath: null,
   audioURL: null,
   audioName: '',
   lyrics: null,
@@ -94,7 +98,7 @@ const saveDraft = debounce(() => {
   if (!state.ed) return;
   const ok = storage.set(DRAFT_KEY, {
     chart: chart(), compensation: state.ed.compensation, lyricsText: state.lyricsText, dirty: state.dirty,
-    audioName: state.audioName, member: state.member, savedAt: new Date().toISOString(),
+    audioName: state.audioName, member: state.member, sourcePath: state.sourcePath, savedAt: new Date().toISOString(),
   });
   if (!ok && !state.storageWarned) {
     state.storageWarned = true;
@@ -787,17 +791,43 @@ function renderMembers() {
   });
 }
 
+/** The artist MIX for the song being edited (lib/mixes.js), song-specific ones first; remembered per title and artist. */
+let artistCache = { key: null, entries: [] };
+function artistEntries() {
+  const song = chart().song;
+  const key = JSON.stringify([song.title || '', song.artist || '', state.artistMixes ? state.artistMixes.length : -1]);
+  if (artistCache.key !== key) artistCache = { key, entries: MX.artistEntries(state.artistMixes, song) };
+  return artistCache.entries;
+}
+
+// Rebuilt only when what it lists changes, so a focused MIX button is not replaced by the edit it
+// just made.
+let libraryKey = '';
 function renderLibrary() {
+  const artist = state.ed ? artistEntries() : [];
+  const key = JSON.stringify([state.library ? S.libraryEntries(state.library).length : null, state.artistMixes ? state.artistMixes.length : null, artist.map(entry => entry.path)]);
+  const artistName = state.ed ? cheer.trimmed(chart().song.artist || '') : '';
+  $('mix-contribute').href = '/editor/mix/?type=artist' + (artistName ? '&artist=' + encodeURIComponent(artistName) : '');
+  $('mix-contribute').textContent = artistName ? `投稿 ${artistName} 的专属 MIX` : '投稿艺人专属 MIX';
+  if (key === libraryKey) return;
+  libraryKey = key;
   const list = clear($('mix-library'));
   if (!state.library) { list.append(h('li', { class: 'meta' }, '正在读取 MIX 库…')); return; }
   const entries = S.libraryEntries(state.library);
-  if (!entries.length) { list.append(h('li', { class: 'meta' }, '没能读取 MIX 库，刷新页面再试。')); return; }
-  for (const entry of entries) {
+  if (!entries.length && !artist.length) { list.append(h('li', { class: 'meta' }, '没能读取 MIX 库，刷新页面再试。')); return; }
+  const item = entry => {
     const bars = entry.bars[0] === entry.bars[1] ? entry.bars[0] : `${entry.bars[0]}–${entry.bars[1]}`;
-    list.append(h('li', {}, h('button', { type: 'button', onclick: () => insertMix(entry), title: entry.text },
-      h('span', { class: 'mix-name', lang: 'ja' }, entry.name),
-      h('span', { class: 'mix-meta' }, `${entry.kind === 'call' ? 'Call' : 'MIX'} · 约 ${bars} 小节${entry.text.includes('{name}') ? ' · 有名字空位' : ''}`))));
+    const scope = entry.scope === 'artist' ? (entry.match === 'song' ? ' · 这首歌专属' : ' · 艺人专属') : '';
+    return h('li', {}, h('button', { type: 'button', onclick: () => insertMix(entry), title: entry.text },
+      h('span', { class: 'mix-name', lang: entry.scope === 'artist' ? undefined : 'ja' }, entry.name),
+      h('span', { class: 'mix-meta' }, `${entry.kind === 'call' ? 'Call' : 'MIX'} · 约 ${bars} 小节${entry.text.includes('{name}') ? ' · 有名字空位' : ''}${scope}`)));
+  };
+  if (artist.length) {
+    list.append(h('li', { class: 'mix-group' }, `${[...new Set(artist.map(entry => entry.artist))].join('、')} 专属`));
+    for (const entry of artist) list.append(item(entry));
+    list.append(h('li', { class: 'mix-group' }, '通用 MIX'));
   }
+  for (const entry of entries) list.append(item(entry));
 }
 
 function insertMix(entry) {
@@ -850,7 +880,7 @@ function releaseIfPointer(stick) {
 function computeSuggestions() {
   if (!lyricLines().length) { status('智能推荐要用到带时间的歌词：先在“歌词…”里加载 LRC。', true); return; }
   if (!duration()) { status('先选择本地音频。', true); return; }
-  state.suggestions = S.suggestions(state.lyrics, duration(), state.grid, chart(), state.library);
+  state.suggestions = S.suggestions(state.lyrics, duration(), state.grid, chart(), state.library, { extra: artistEntries() });
   state.dismissed.clear();
   state.choices.clear();
   const count = state.suggestions.length;
@@ -996,11 +1026,13 @@ async function lookupLyrics() {
 // ---------------------------------------------------------------------------------------------
 // Import, export and sharing.
 
-function importCheer(bytes, source) {
+/** Opens a cheer file; `path` is its place in the repository when it came from the community library. */
+function importCheer(bytes, source, { path = null } = {}) {
   const result = cheer.parse(bytes, { sharedFile: false });
   if (!result.valid) { status(`无法打开${source}：${result.errors.slice(0, 2).map(M.issueMessage).join(' ')}`, true); return false; }
   if (state.ed && hasWorkToLose() && !confirm('打开这份应援会替换当前草稿（还没有保存到本机）。上一份草稿会留一份备份。继续？')) return false;
   backUpDraft();
+  state.sourcePath = path;
   useChart(result.chart);
   state.dirty = false;
   saveDraft();
@@ -1031,6 +1063,18 @@ function shareChoice() {
   return { kind: 'referenced', link: link || undefined, consented: consent === 'yes' };
 }
 
+/**
+ * Where "投稿" goes: the community file this chart was opened from, while its song still belongs
+ * in that file's folder and the visitor chose to edit it; otherwise a new file.
+ */
+function shareTarget(prepared) {
+  const path = state.sourcePath;
+  const sameFolder = path && P.nameKey(path.split('/').slice(0, 3).join('/')) === P.nameKey(P.expectedFolder(prepared.song));
+  $('share-target').hidden = !sameFolder;
+  const edit = sameFolder && document.querySelector('input[name="target"]:checked').value === 'edit';
+  return edit ? path : null;
+}
+
 function renderShare() {
   const choice = shareChoice();
   $('share-referenced').hidden = choice.kind !== 'referenced';
@@ -1052,13 +1096,25 @@ function renderShare() {
   $('share-download').textContent = mode === 'note' ? '下载来源说明' : '下载分享文件';
   $('share-download').disabled = !mode;
   $('share-submit').disabled = mode !== 'file';
-  return { prepared, outcome, mode, author };
+  const editing = shareTarget(prepared);
+  $('share-submit').textContent = editing ? '提交修改…' : '投稿到 CheerBook…';
+  return { prepared, outcome, mode, author, editing };
 }
 
 async function submitShare() {
-  const { prepared, outcome, mode, author } = renderShare();
+  const { prepared, outcome, mode, author, editing } = renderShare();
   if (mode !== 'file') return;
   const content = outcome.text;
+  if (editing) {
+    // GitHub's edit page cannot be prefilled, so the new text goes to the clipboard (or a download).
+    let copied = false;
+    try { await navigator.clipboard.writeText(content); copied = true; } catch { download(fileName(prepared.song, ' (分享)'), content); }
+    window.open(`${REPO}/edit/main/${editing.split('/').map(encodeURIComponent).join('/')}`, '_blank', 'noopener');
+    markExported();
+    status(`${copied ? '修改后的内容已复制到剪贴板' : '已下载修改后的文件'}，并打开了 GitHub 上原文件的编辑页面：全选、粘贴后按页面提示提交。改自己投稿的文件，检查通过后自动上线；改别人的文件要等维护者审核。`, true);
+    $('share-dialog').close();
+    return;
+  }
   const folder = P.expectedFolder(prepared.song);
   const name = `${folder}/${P.folderName(author) || '应援'}.cheer.json`;
   const base = `${REPO}/new/main?filename=${encodeURIComponent(name)}`;
@@ -1190,6 +1246,7 @@ function renderAll({ panel = true } = {}) {
   renderTimeline();
   if (panel) renderSelected();
   renderIssues();
+  renderLibrary();
   $('undo').disabled = !state.ed.canUndo;
   $('redo').disabled = !state.ed.canRedo;
 }
@@ -1280,6 +1337,7 @@ function wire() {
     if (hasWorkToLose() && !confirm('新建空白应援会替换当前草稿（还没有保存到本机）。上一份草稿会留一份备份。继续？')) return;
     backUpDraft();
     state.dirty = false;
+    state.sourcePath = null;
     useChart(newChart({ title: chart().song.title, artist: chart().song.artist, duration: duration() }));
     $('more-dialog').close();
     status('已新建空白应援。', true);
@@ -1317,12 +1375,15 @@ function readDraft() {
 
 async function start() {
   wire();
-  try {
-    const reply = await fetch('/spec/mix-library.json');
-    state.library = reply.ok ? await reply.json() : null;
-  } catch { state.library = null; }
-  if (!state.library || typeof state.library !== 'object') state.library = { entries: [], sources: {} };
-  renderLibrary();
+  const fetchJSON = async url => {
+    try {
+      const reply = await fetch(url);
+      return reply.ok ? await reply.json() : null;
+    } catch { return null; }
+  };
+  const [library, artists] = await Promise.all([fetchJSON('/spec/mix-library.json'), fetchJSON('/mix/artists.json')]);
+  state.library = library && typeof library === 'object' ? library : { entries: [], sources: {} };
+  state.artistMixes = artists && Array.isArray(artists.mixes) ? artists.mixes : [];
   const draft = readDraft();
   try {
     useChart(draft ? { ...draft.chart, members: draft.chart.members || [] } : newChart(), { compensation: draft ? E.clampedCompensation(draft.compensation) : undefined, quiet: true });
@@ -1332,6 +1393,7 @@ async function start() {
   }
   state.dirty = !!(draft && draft.dirty);
   state.member = draft && typeof draft.member === 'string' && chart().members.some(member => member.id === draft.member) ? draft.member : null;
+  state.sourcePath = draft && typeof draft.sourcePath === 'string' && draft.sourcePath.startsWith(P.LIBRARY_DIR + '/') ? draft.sourcePath : null;
   if (draft && typeof draft.lyricsText === 'string' && draft.lyricsText) { state.lyricsText = draft.lyricsText; applyLyrics(draft.lyricsText); state.dirty = !!draft.dirty; }
   if (draft && chart().events.length) status(`已恢复上次的草稿（${chart().events.length} 条应援）。重新选择音频“${draft.audioName || ''}”即可继续。`);
   else status('选择本地音频开始。音频只在你的浏览器里播放，不会上传。');
@@ -1342,7 +1404,10 @@ async function start() {
   if (wanted && /^\/cheers\/[^?#\\]+\.cheer\.json$/.test(wanted) && !wanted.split('/').includes('..')) {
     try {
       const reply = await fetch(wanted, { credentials: 'omit' });
-      if (reply.ok) importCheer(new Uint8Array(await reply.arrayBuffer()), '社区库里的这份应援');
+      // The repository path, for "提交修改": decoded, and only plain names between the slashes.
+      const path = decodeURIComponent(wanted.slice(1));
+      const plainPath = path.split('/').every(part => part !== '' && part !== '.' && part !== '..' && !/[\\?#]/.test(part));
+      if (reply.ok) importCheer(new Uint8Array(await reply.arrayBuffer()), '社区库里的这份应援', { path: plainPath ? path : null });
       else status('没能读取社区库里的这份应援。', true);
     } catch { status('没能读取社区库里的这份应援。', true); }
   }

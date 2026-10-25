@@ -1,6 +1,14 @@
-# After a merge to main, regenerates index.json from cheers/ and commits it when it changed, so
-# contributors never have to run the index tool themselves. The checkout keeps no token; the token
-# is handed only to the final push, after the index tool has run.
+# After a merge to main, brings the generated files up to date and commits them in one bot commit,
+# so contributors never have to run the tools themselves: accepted MIX proposals go into
+# spec/mix-library.json (tools/accept-mix-proposals.js, when it exists), contributors.json records
+# the GitHub account that contributed each new file (tools/record-contributors.js, C-011), and
+# index.json is regenerated. "自动合并" starts this workflow by hand after it merges, because a merge
+# made with a workflow's token does not start other workflows. The records continue from the commit
+# contributors.json was last brought up to date with, so a run that failed (for example because main
+# moved before its push) or was cancelled while waiting is caught up by the next run, manual or not.
+# The checkout keeps no token. The token is given to two steps only: the lookup of the pull
+# request each new contribution came from (read-only API calls; no code from the repository runs
+# there) and the final push, after the tools have run.
 name: 更新索引
 
 on:
@@ -8,12 +16,14 @@ on:
     branches: [main]
     paths:
       - 'cheers/**'
+      - 'mix/**'
+      - 'spec/mix-library.json'
+      - 'contributors.json'
       - 'lib/**'
       - 'tools/**'
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: index
@@ -21,27 +31,65 @@ concurrency:
 
 jobs:
   index:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      # The commit main pointed to before the push (empty on a manual run). The record tool uses it
+      # only when contributors.json does not say where the records stand.
+      BEFORE: ${{ github.event.before }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+      - name: 找出新增投稿的提交
+        run: node tools/record-contributors.js --before "$BEFORE" --after "$GITHUB_SHA" --list > "$RUNNER_TEMP/commits.txt"
+      - name: 查询这些提交来自哪个 Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pulls"
+          while IFS= read -r sha; do
+            if [[ ! "$sha" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]]; then
+              echo "提交编号的格式不对。"
+              exit 1
+            fi
+            gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" > "$RUNNER_TEMP/pulls/$sha.json"
+          done < "$RUNNER_TEMP/commits.txt"
+      - name: 收录通过的 MIX 提议
+        run: |
+          if [ -f tools/accept-mix-proposals.js ]; then
+            node tools/accept-mix-proposals.js
+          else
+            echo "还没有 MIX 提议工具，跳过。"
+          fi
+      - name: 记录投稿者
+        run: node tools/record-contributors.js --before "$BEFORE" --after "$GITHUB_SHA" --pulls "$RUNNER_TEMP/pulls" --branch "$GITHUB_REF_NAME" --actor "$GITHUB_ACTOR" --actor-id "$GITHUB_ACTOR_ID"
       - name: 生成 index.json
         run: node tools/build-index.js
       - name: 提交变化
         env:
           PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git diff --quiet -- index.json; then
-            echo "index.json 没有变化。"
+          changed=()
+          for file in spec/mix-library.json mix/proposals contributors.json index.json; do
+            if [ -n "$(git status --porcelain -- "$file")" ]; then
+              changed+=("$file")
+            fi
+          done
+          if [ "${#changed[@]}" -eq 0 ]; then
+            echo "没有需要提交的变化。"
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.json
-          git commit -m 'index: regenerate index.json'
+          git add --all -- "${changed[@]}"
+          git commit -m "index: update ${changed[*]}"
           git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main

@@ -32,11 +32,11 @@ function chart(song, author) {
 test('an empty library builds a home page that invites the first contribution', () => {
   const root = makeRepo({});
   const out = path.join(root, '_site');
-  assert.deepEqual(buildSite(root, out), { entries: 0 });
+  assert.deepEqual(buildSite(root, out), { entries: 0, mixes: 0 });
   const home = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
   assert.match(home, /还没有投稿/);
   assert.doesNotMatch(home, /id="filter"/);
-  for (const file of ['mix.html', '404.html', '_headers', 'index.json', 'spec/cheer.schema.json', 'spec/mix-library.json', 'style.css', 'app.js', 'favicon.svg']) {
+  for (const file of ['mix/index.html', '404.html', '_headers', 'index.json', 'spec/cheer.schema.json', 'spec/mix-library.json', 'style.css', 'app.js', 'favicon.svg']) {
     assert.ok(fs.existsSync(path.join(out, file)), file);
   }
   assert.equal(JSON.parse(fs.readFileSync(path.join(out, 'index.json'), 'utf8')).count, 0);
@@ -47,7 +47,7 @@ test('contributors’ text is escaped and their files are published under their 
   const file = 'cheers/' + evil.replace(/[<>"/\\:*?|]/g, '_') + '/曲/作者.cheer.json';
   const root = makeRepo({ [file]: chart({ title: '曲', artist: evil, duration: 200 }, '<img src=x onerror=1>') });
   const out = path.join(root, '_site');
-  assert.deepEqual(buildSite(root, out), { entries: 1 });
+  assert.deepEqual(buildSite(root, out), { entries: 1, mixes: 0 });
   const home = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
   assert.doesNotMatch(home, /<script>alert|<img src=x/);
   assert.match(home, /&lt;script&gt;alert\(1\)&lt;\/script&gt;&quot;&#39;&amp;/);
@@ -59,7 +59,7 @@ test('pages load only this site’s own script and style, with no inline code', 
   const root = makeRepo({ 'cheers/合成组合/合成曲目/a.cheer.json': chart({ title: '合成曲目', artist: '合成组合', duration: 180 }, '甲') });
   const out = path.join(root, '_site');
   buildSite(root, out);
-  for (const page of ['index.html', 'mix.html', '404.html']) {
+  for (const page of ['index.html', 'mix/index.html', '404.html']) {
     const html = fs.readFileSync(path.join(out, page), 'utf8');
     const scripts = html.match(/<script[^>]*>/g) || [];
     assert.deepEqual(scripts, ['<script src="/app.js" defer>'], page);
@@ -76,7 +76,7 @@ test('the MIX page lists every built-in entry with its sources', () => {
   const out = path.join(root, '_site');
   buildSite(root, out);
   const library = JSON.parse(fs.readFileSync(path.join(ROOT, 'spec', 'mix-library.json'), 'utf8'));
-  const page = fs.readFileSync(path.join(out, 'mix.html'), 'utf8');
+  const page = fs.readFileSync(path.join(out, 'mix/index.html'), 'utf8');
   for (const entry of library.entries) assert.match(page, new RegExp(`id="mix-${entry.id}"`));
   assert.equal((page.match(/<article /g) || []).length, library.entries.length);
 });
@@ -134,7 +134,7 @@ test('the search box is hidden until the script shows it, and the 404 page marks
   buildSite(root, out);
   assert.match(fs.readFileSync(path.join(out, 'index.html'), 'utf8'), /<div class="filter" hidden>/);
   assert.doesNotMatch(fs.readFileSync(path.join(out, '404.html'), 'utf8'), /aria-current/);
-  assert.match(fs.readFileSync(path.join(out, 'mix.html'), 'utf8'), /<a href="\/mix" aria-current="page">/);
+  assert.match(fs.readFileSync(path.join(out, 'mix/index.html'), 'utf8'), /<a href="\/mix\/" aria-current="page">/);
 });
 
 test('a symbolic link anywhere among the copied files stops the build', () => {

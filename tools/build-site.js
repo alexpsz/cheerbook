@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 // Builds the CheerBook website: a home page listing every accepted cheer file by artist and song,
-// a page for the built-in MIX library, and the machine-readable files players and tools fetch
-// (index.json, the cheer files, the Schema and the MIX library). Everything contributors wrote is
+// a MIX page (the built-in library and the artist MIX), the web editor and its MIX form, and the
+// machine-readable files players and tools fetch (index.json, the cheer and MIX files, the Schema,
+// the MIX library, and /mix/artists.json, every artist MIX in one file for the editor). Everything contributors wrote is
 // escaped, and the pages carry no inline script or style, so the Content-Security-Policy in
 // _headers can forbid both. Cloudflare Pages runs it on every push to main (build command
 // `node tools/build-site.js`, output folder `_site`).
@@ -10,12 +11,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { checkLibrary, buildIndex, regularFile } = require('../lib/library');
+const { POSITION_TITLES: POSITIONS, PROPOSALS_DIR } = require('../lib/mixes');
 
 const REPO = 'https://github.com/alexpsz/cheerbook';
 const LIVEGLOW = 'https://github.com/alexpsz/liveglow';
 const MARKER = '.cheerbook-site';
-const POSITIONS = { intro: '前奏', afterMix: '接在 MIX 后', interlude: '间奏', chorusLead: '副歌前', outro: '尾奏', verse: '有人唱时' };
 const PERMISSIONS = { original: '自己听写', 'open-license': '开放许可', consented: '作者同意转载' };
+const MIX_PERMISSIONS = { ...PERMISSIONS, original: '自己创作' };
 const LICENSE_NAMES = { 'CC0-1.0': 'CC0', 'CC-BY-4.0': 'CC BY 4.0', 'CC-BY-SA-4.0': 'CC BY-SA 4.0' };
 
 const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -31,7 +33,7 @@ const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const clock = seconds => { const total = Math.round(seconds); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`; };
 
 function layout({ title, description, current, body, scripts = [{ src: '/app.js' }], styles = [], wide = false }) {
-  const nav = [['/', '浏览应援', 'home'], ['/editor/', '制作应援', 'editor'], ['/mix', '通用 MIX', 'mix'], [REPO + '/blob/main/CONTRIBUTING.md', '投稿', ''], [REPO, 'GitHub', '']];
+  const nav = [['/', '浏览应援', 'home'], ['/editor/', '制作应援', 'editor'], ['/mix/', 'MIX', 'mix'], [REPO + '/blob/main/CONTRIBUTING.md', '投稿', ''], [REPO, 'GitHub', '']];
   return `<!doctype html>
 <html lang="zh-Hans">
 <head>
@@ -70,7 +72,7 @@ function licenseLabel(entry) {
 
 // Groups follow the folders, which already fold case and spacing (lib/library.js), so "BiSH"
 // and "BISH" are one artist; each group shows the spelling of its first file in path order.
-function homePage(entries, library) {
+function homePage(entries, library, mixRecords) {
   const artists = new Map();
   for (const entry of [...entries].sort((a, b) => byCodePoint(a.path, b.path))) {
     const [, artistFolder, titleFolder] = entry.path.split('/');
@@ -99,6 +101,7 @@ ${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</spa
 <li><strong>${entries.length}</strong><span>份应援</span></li>
 <li><strong>${songCount}</strong><span>首歌</span></li>
 <li><strong>${library.entries.length}</strong><span>条通用 MIX</span></li>
+<li><strong>${mixRecords.length}</strong><span>条艺人专属 MIX</span></li>
 </ul>
 <p class="cta"><a class="button" href="/editor/">在网页上制作应援</a><span class="meta">选一首本地歌曲，边听边点；音频不会上传。</span></p>
 </div>
@@ -110,17 +113,43 @@ ${browse}
 <div class="card"><h3>在网页上</h3><ol class="steps"><li>打开<a href="/editor/">制作应援</a>，选择本地音频。</li><li>加载歌词，按住成员按钮或数字键边听边点，或从通用 MIX 一点插入。</li><li>保存到本机，或直接投稿到 CheerBook。</li></ol></div>
 <div class="card"><h3>在映场中</h3><ol class="steps"><li>下载这首歌的 <code>.cheer.json</code>。</li><li>在<a href="${LIVEGLOW}">映场</a>“正在播放”侧栏的“应援”标签点“导入…”。</li><li>播放到匹配的录音时，MIX 与 call 会跟着歌词出现。</li></ol></div>
 <div class="card"><h3>投稿</h3><p>只收自己听写打轴、或有开放许可 / 原作者同意的时间轴，不能有歌词原文。按<a href="${REPO}/blob/main/CONTRIBUTING.md">投稿指南</a>在 GitHub 上发起 Pull Request，检查会自动运行。</p></div>
-<div class="card"><h3>给开发者</h3><p>格式说明见 <a href="${REPO}/blob/main/spec/README.md">spec/README.md</a>；机器可读的 <a href="/index.json">index.json</a>、<a href="/spec/cheer.schema.json">JSON Schema</a> 与 <a href="/spec/mix-library.json">MIX 库</a>都可以直接获取。</p></div>
+<div class="card"><h3>MIX</h3><p><a href="/mix/">MIX 页</a>收录通用 MIX 与各位艺人的专属 MIX。你可以<a href="/editor/mix/?type=proposal">提议通用 MIX</a>，审核后并入内置库；也可以<a href="/editor/mix/?type=artist">投稿艺人专属 MIX</a>，制作这位艺人的歌时就能一点插入。</p></div>
+<div class="card"><h3>给开发者</h3><p>格式说明见 <a href="${REPO}/blob/main/spec/README.md">spec/README.md</a>；机器可读的 <a href="/index.json">index.json</a>、<a href="/spec/cheer.schema.json">JSON Schema</a>、<a href="/spec/mix-library.json">MIX 库</a>与<a href="/mix/artists.json">艺人专属 MIX</a>都可以直接获取。</p></div>
 </div>
 </section>`;
   return layout({ title: 'CheerBook 应援本 · 偶像歌曲应援时间轴', description: '偶像歌曲应援 / MIX 时间轴的社区库：社区投稿、维护者审核、自由下载，文件不含歌词。', current: 'home', body });
 }
 
-function mixPage(library) {
+function artistMixSection(mixRecords) {
+  if (!mixRecords.length) {
+    return `<div class="card empty"><p>还没有艺人专属 MIX。某个组合自己的口号、某首歌固定的 call，可以作为专属 MIX 投稿：制作这位艺人的歌时，编辑器会把它放在 MIX 库最前面，推荐也会用到。</p><p><a class="button" href="/editor/mix/?type=artist">投稿艺人专属 MIX</a></p></div>`;
+  }
+  // Grouped by folder, which already folds case and spacing, as on the home page.
+  const artists = new Map();
+  for (const record of [...mixRecords].sort((a, b) => byCodePoint(a.path, b.path))) {
+    const folder = record.path.split('/')[2].toLowerCase();
+    const artist = artists.get(folder) || { name: record.artist, items: [] };
+    artist.items.push(record);
+    artists.set(folder, artist);
+  }
+  return `<div class="filter" hidden><label for="filter">搜索</label><input id="filter" type="search" placeholder="艺人、歌名、名称或作者" autocomplete="off" data-unit="条 MIX"><span id="filter-status" role="status" aria-live="polite"></span></div>
+${[...artists.values()].map(artist => `<div class="artist" data-artist><h3>${userText(artist.name)}</h3><ul class="songs">
+${artist.items.map(record => {
+    const search = plainUserText([record.artist, record.name, record.text, ...(record.songs || []), ...record.authors].join(' '));
+    const file = record.path.split('/').map(encodeURIComponent).join('/');
+    return `<li class="song card" data-search="${escapeHTML(search)}"><header class="mix-head"><h4>${userText(record.name)}</h4><span class="badge">${record.kind === 'call' ? 'CALL' : 'MIX'}</span></header>
+<p class="chant">${userText(record.text)}</p>
+<p class="meta">${record.songs ? `只用于：${record.songs.map(userText).join('、')}` : '用于这位艺人的所有歌'} · ${userText(record.authors.join('、'))} · ${escapeHTML(MIX_PERMISSIONS[record.permission] || record.permission)} · ${escapeHTML(licenseLabel(record))}</p>
+<p class="actions"><a href="/editor/mix/?mix=${encodeURIComponent(href(record.path))}">在网页中编辑</a><a href="${href(record.path)}" download>下载</a><a href="${REPO}/blob/main/${file}">GitHub</a></p></li>`;
+  }).join('\n')}
+</ul></div>`).join('\n')}`;
+}
+
+function mixPage(library, mixRecords) {
   const host = url => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } };
   // Entry ids get a prefix so they can never clash with the page's own ids.
   const items = library.entries.map(entry => `<article class="card" id="mix-${escapeHTML(entry.id)}">
-<header><h2 lang="ja">${escapeHTML(entry.name)}</h2><span class="badge">${entry.kind === 'call' ? 'CALL' : 'MIX'}</span></header>
+<header><h3 lang="ja">${escapeHTML(entry.name)}</h3><span class="badge">${entry.kind === 'call' ? 'CALL' : 'MIX'}</span></header>
 <p class="chant" lang="ja">${escapeHTML(entry.text)}</p>
 <p class="romaji" lang="ja-Latn">${escapeHTML(entry.romaji)}</p>
 <dl class="facts">
@@ -128,18 +157,26 @@ function mixPage(library) {
 ${entry.positions.length ? `<dt>常见位置</dt><dd>${entry.positions.map(position => escapeHTML(POSITIONS[position] || position)).join('、')}</dd>` : ''}
 ${entry.note ? `<dt>说明</dt><dd>${escapeHTML(entry.note)}</dd>` : ''}
 ${entry.readingNote ? `<dt>读音</dt><dd>${escapeHTML(entry.readingNote)}</dd>` : ''}
-<dt>核对来源</dt><dd>${entry.sources.map(code => `<a href="${escapeHTML(library.sources[code])}">${escapeHTML(host(library.sources[code]))}</a>`).join('、')}</dd>
+<dt>核对来源</dt><dd>${entry.sources.map(code => `<a href="${escapeHTML(library.sources[code])}">${escapeHTML(host(library.sources[code]))}</a>`).join('、')}（${escapeHTML(entry.retrieved || library.retrieved)} 读取）</dd>
 </dl>
 </article>`).join('\n');
   const body = `<div class="hero">
-<h1>通用 MIX</h1>
-<p>偶像现场通用的 MIX 与 call，按“${escapeHTML(library.credit)}”署名，以 CC0 公开。只收在多个相互独立的公开来源中核对为通用的口号（${escapeHTML(library.retrieved)} 核对），不收某个组合专属的口号。<code>{name}</code> 处填入成员名字。</p>
-<p>映场内置同一份库；机器可读版本见 <a href="/spec/mix-library.json">mix-library.json</a>。</p>
+<h1>MIX</h1>
+<p>通用 MIX 是偶像现场通用的 MIX 与 call，按“${escapeHTML(library.credit)}”署名，以 CC0 公开，只收在多个相互独立的公开来源中核对为通用的口号；映场内置同一份库。艺人专属 MIX 是某个组合或某首歌自己的口号，由社区投稿、按各自的许可公开。<code>{name}</code> 处填入成员名字。</p>
+<p class="cta"><a class="button" href="/editor/mix/?type=proposal">提议通用 MIX</a><a class="button" href="/editor/mix/?type=artist">投稿艺人专属 MIX</a><span class="meta">填写口号与读音，检查通过后一键打开 GitHub 投稿，维护者审核后上线。</span></p>
+<p class="meta">跳到：<a href="#builtin">通用 MIX（${library.entries.length}）</a> · <a href="#artists">艺人专属 MIX（${mixRecords.length}）</a></p>
 </div>
-<section class="mix" aria-label="MIX 列表">
+<section aria-labelledby="builtin"><h2 id="builtin">通用 MIX</h2>
+<p class="meta">机器可读版本：<a href="/spec/mix-library.json">mix-library.json</a>。</p>
+<div class="mix">
 ${items}
+</div>
+</section>
+<section aria-labelledby="artists"><h2 id="artists">艺人专属 MIX</h2>
+<p class="meta">制作这位艺人的歌时，网页编辑器会提供并推荐这些 MIX。机器可读版本：<a href="/mix/artists.json">artists.json</a>。</p>
+${artistMixSection(mixRecords)}
 </section>`;
-  return layout({ title: '通用 MIX · CheerBook 应援本', description: '偶像现场通用的 MIX 与 call：日文原文、罗马音、常见位置与核对来源，CC0。', current: 'mix', body });
+  return layout({ title: 'MIX · CheerBook 应援本', description: '偶像现场通用的 MIX 与 call（CC0），以及社区投稿的艺人专属 MIX：日文原文、罗马音、常见位置与来源。', current: 'mix', body });
 }
 
 function notFoundPage() {
@@ -152,6 +189,16 @@ function editorPage(markup) {
     title: '制作应援 · CheerBook 应援本', current: 'editor', body: markup, wide: true,
     description: '在浏览器里边听本地歌曲边打应援：歌词卷轴、应援棒打点、通用 MIX、节拍分析与智能推荐，即时检查格式；音频不会上传。',
     scripts: [{ src: '/editor/app.js', module: true }], styles: ['/editor/editor.css'],
+  });
+}
+
+// The MIX form lives under /editor/ for the editor's policy: it reads this site's MIX library and
+// the artist MIX being edited.
+function mixFormPage(markup) {
+  return layout({
+    title: '制作 MIX · CheerBook 应援本', current: 'mix', body: markup,
+    description: '提议一条通用 MIX，或投稿某位艺人的专属 MIX：填写口号、读音与小节数，即时检查，一键打开 GitHub 投稿。',
+    scripts: [{ src: '/editor/mix.js', module: true }], styles: ['/editor/editor.css', '/editor/mix.css'],
   });
 }
 
@@ -203,6 +250,13 @@ const HEADERS = `/*
   Access-Control-Allow-Origin: *
   Cache-Control: public, max-age=300
 
+/mix/artists.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=300
+
+/mix/artists/*
+  Access-Control-Allow-Origin: *
+
 /cheers/*
   Access-Control-Allow-Origin: *
 
@@ -221,7 +275,10 @@ function buildSite(root, output) {
     if (existing.length && !existing.includes(MARKER)) throw new Error(`${output} 不是空文件夹，也不是之前生成的网站，不会覆盖。`);
     fs.rmSync(output, { recursive: true, force: true });
   }
-  const { problems, entries } = checkLibrary(root);
+  const checked = checkLibrary(root);
+  const { entries, mixes: mixRecords } = checked;
+  // Proposals are not published, so one that cannot be accepted does not stop the site.
+  const problems = checked.problems.filter(found => !found.file.startsWith(PROPOSALS_DIR + '/'));
   if (problems.length) {
     // The messages are already quoted safely (lib/library.js), so the build log can show them.
     const list = problems.map(found => `${found.file}：${found.message}`.replace(/[\x00-\x1F]/g, ' ')).join('\n');
@@ -235,20 +292,32 @@ function buildSite(root, output) {
     fs.writeFileSync(path.join(output, file), content);
   };
   write(MARKER, 'Generated by tools/build-site.js; the whole folder is replaced on every build.\n');
-  write('index.html', homePage(entries, library));
-  write('mix.html', mixPage(library));
+  write('index.html', homePage(entries, library, mixRecords));
+  write('mix/index.html', mixPage(library, mixRecords));
   write('404.html', notFoundPage());
   write('editor/index.html', editorPage(read('site/editor/page.html').toString('utf8')));
+  if (fs.existsSync(path.join(root, 'site', 'editor', 'mix.html'))) write('editor/mix/index.html', mixFormPage(read('site/editor/mix.html').toString('utf8')));
   write('editor/lib.js', bundleLib(read, fs.readdirSync(path.join(root, 'lib'))));
+  const pages = new Set(['page.html', 'mix.html']);
   for (const entry of fs.readdirSync(path.join(root, 'site', 'editor'), { withFileTypes: true })) {
-    if (entry.name !== 'page.html') write('editor/' + entry.name, read('site/editor/' + entry.name));
+    if (!pages.has(entry.name)) write('editor/' + entry.name, read('site/editor/' + entry.name));
   }
   write('_headers', HEADERS);
-  write('index.json', JSON.stringify(buildIndex(entries), null, 2) + '\n');
+  write('index.json', JSON.stringify(buildIndex(entries, mixRecords), null, 2) + '\n');
   for (const entry of entries) write(entry.path, read(entry.path));
+  const artistMixes = mixRecords.map(record => {
+    const bytes = read(record.path);
+    write(record.path, bytes);
+    return { path: record.path, ...JSON.parse(bytes.toString('utf8')) };
+  });
+  write('mix/artists.json', JSON.stringify({
+    format: 'cheerbook-artist-mixes', version: 1,
+    description: 'Every artist MIX in CheerBook (mix/artists/), each file\'s content plus its path, for the web editor. Generated by tools/build-site.js.',
+    mixes: artistMixes,
+  }, null, 2) + '\n');
   for (const file of ['cheer.schema.json', 'mix-library.json']) write('spec/' + file, read('spec/' + file));
   for (const file of ['style.css', 'app.js', 'favicon.svg']) write(file, read('site/' + file));
-  return { entries: entries.length };
+  return { entries: entries.length, mixes: mixRecords.length };
 }
 
 if (require.main === module) {
@@ -258,8 +327,8 @@ if (require.main === module) {
   const positional = args.filter((arg, i) => arg !== '--root' && args[i - 1] !== '--root');
   const output = path.resolve(positional[0] || path.join(root, '_site'));
   try {
-    const { entries } = buildSite(root, output);
-    console.log(`网站已生成：${output}（${entries} 份应援）。`);
+    const { entries, mixes } = buildSite(root, output);
+    console.log(`网站已生成：${output}（${entries} 份应援，${mixes} 条艺人专属 MIX）。`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

@@ -19,6 +19,6 @@
       if (match) shown++;
     }
     for (const artist of artists) artist.hidden = !artist.querySelector('[data-search]:not([hidden])');
-    status.textContent = query === '' ? '' : shown ? `找到 ${shown} 首歌` : '没有找到，换个关键词试试';
+    status.textContent = query === '' ? '' : shown ? `找到 ${shown} ${input.dataset.unit || '首歌'}` : '没有找到，换个关键词试试';
   });
 })();

@@ -75,6 +75,7 @@
 .mix-list button { width: 100%; text-align: left; display: grid; gap: 2px; }
 .mix-list .mix-name { font-weight: 600; }
 .mix-list .mix-meta { color: var(--muted); font-size: 0.8rem; }
+.mix-list .mix-group { color: var(--muted); font-size: 0.8rem; font-weight: 600; margin-top: 4px; }
 .selected-grid { display: grid; gap: 8px; }
 .selected-grid .row2 { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; }
 .selected-grid textarea { width: 100%; }

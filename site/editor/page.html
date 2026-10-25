@@ -62,9 +62,10 @@
       </form>
     </section>
     <section class="card ed-panel" aria-labelledby="mix-title">
-      <h2 id="mix-title">通用 MIX</h2>
-      <p class="meta" id="mix-hint">点一下插入到当前位置；有节拍时对齐到下一拍。</p>
+      <h2 id="mix-title">MIX</h2>
+      <p class="meta" id="mix-hint">点一下插入到当前位置；有节拍时对齐到下一拍。这首歌的艺人有专属 MIX 时排在最前面。</p>
       <ul id="mix-library" class="mix-list"></ul>
+      <p class="meta"><a id="mix-contribute" href="/editor/mix/?type=artist">投稿这位艺人的专属 MIX</a> · <a href="/editor/mix/?type=proposal">提议通用 MIX</a></p>
     </section>
   </aside>
 </div>
@@ -155,6 +156,12 @@
         <label><input type="radio" name="consent" value="unsure" checked> 不确定</label>
       </fieldset>
     </div>
+    <fieldset class="ed-choice" id="share-target" hidden>
+      <legend>投稿方式</legend>
+      <label><input type="radio" name="target" value="edit" checked> 修改社区库里的原文件</label>
+      <label><input type="radio" name="target" value="new"> 另投一份新文件</label>
+      <p class="meta">改自己投稿的文件，检查通过后自动上线；改别人的文件要等维护者审核。</p>
+    </fieldset>
     <label class="check" id="share-confirm-row" hidden><input type="checkbox" id="share-confirm"> 没有歌词可核对；我确认文件里没有歌词原文</label>
     <p id="share-outcome" class="share-outcome" role="status" aria-live="polite"></p>
     <div class="dialog-row end">

@@ -106,3 +106,6 @@ footer.site p { margin: 4px 0; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 18px 0 0; }
 a.button { display: inline-block; background: var(--accent); color: var(--on-accent); text-decoration: none; border-radius: 10px; padding: 8px 16px; font-weight: 600; }
 a.button:hover { filter: brightness(1.08); }
+.mix-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 6px; }
+.mix-head h4 { margin: 0; }
+.song .chant { font-size: 1.05rem; }

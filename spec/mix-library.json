@@ -122,7 +122,10 @@
       "positions": ["verse"],
       "sources": ["W", "C"],
       "note": "B 段有人唱时的手拍子",
-      "readings": { "kana": ["ぱん ぱぱん（ひゅー）× 4"], "romaji": ["Pan papan (hyū) × 4"] }
+      "readings": {
+        "kana": ["ぱん ぱぱん（ひゅー）× 4"],
+        "romaji": ["Pan papan (hyū) × 4"]
+      }
     },
     {
       "id": "encho",

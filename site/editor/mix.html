@@ -1,0 +1,217 @@
+<div class="editor mixform" id="mixform" data-type="proposal">
+<noscript><p class="card">这个页面需要开启 JavaScript。</p></noscript>
+
+<div class="mf-head">
+  <nav class="mf-links" aria-label="相关页面"><a href="/mix/">MIX 列表</a><a href="/editor/">制作应援</a></nav>
+  <h1>制作 MIX</h1>
+  <p class="meta">填写口号、读音与小节数，右侧（窄屏在下方）即时检查并预览。草稿自动保存在这个浏览器里。</p>
+</div>
+
+<section class="card mf-start" aria-label="投稿种类与文件">
+  <fieldset class="mf-types">
+    <legend>要做哪一种</legend>
+    <div class="mf-type">
+      <input type="radio" name="mf-type" id="mf-type-proposal" value="proposal" checked aria-describedby="mf-type-proposal-hint">
+      <label for="mf-type-proposal">提议通用 MIX</label>
+      <p class="meta" id="mf-type-proposal-hint">维护者审核合并后进入内置库，编辑器的插入与推荐都会用到，映场下个版本同步。只收偶像圈通用、不属于某个组合的口号，并附至少两个能看到它的公开网页。</p>
+    </div>
+    <div class="mf-type">
+      <input type="radio" name="mf-type" id="mf-type-artist" value="artist" aria-describedby="mf-type-artist-hint">
+      <label for="mf-type-artist">投稿艺人专属 MIX</label>
+      <p class="meta" id="mf-type-artist-hint">只在编辑这位艺人（或指定歌曲）的应援时出现。只收自己创作、有开放许可或原作者同意转载的 MIX。</p>
+    </div>
+  </fieldset>
+  <div class="mf-tools">
+    <button type="button" id="mf-import" aria-describedby="mf-import-hint">导入文件…</button>
+    <input type="file" id="mf-import-file" accept=".json,application/json" class="visually-hidden" tabindex="-1" aria-hidden="true">
+    <button type="button" id="mf-reset" class="danger">清空…</button>
+    <span class="meta" id="mf-import-hint">打开本机的 .mix.json（两种都可以）继续编辑。</span>
+  </div>
+  <p id="mf-editing" class="mf-editing" hidden></p>
+  <p id="mf-status" class="ed-status" role="status" aria-live="polite"></p>
+</section>
+
+<div class="mf-layout">
+<form id="mf-form" class="mf-form" novalidate autocomplete="off">
+
+  <section class="card mf-section" data-only="artist" aria-labelledby="mf-artist-title">
+    <h2 id="mf-artist-title">艺人与歌曲</h2>
+    <div class="mf-group" data-group="artist">
+      <label for="mf-artist">艺人</label>
+      <input id="mf-artist" data-bind="artist" aria-describedby="mf-artist-hint" spellcheck="false">
+      <p class="mf-hint" id="mf-artist-hint">按歌曲信息里的写法填。文件放在这位艺人的文件夹里。</p>
+      <div class="mf-error" id="mf-err-artist" hidden></div>
+    </div>
+    <fieldset class="mf-group mf-fieldset" data-group="songs">
+      <legend>指定歌曲（可选）</legend>
+      <p class="mf-hint" id="mf-songs-hint">不填时适用于这位艺人的所有歌；填了就只在这些歌里出现。</p>
+      <ul class="mf-rows" id="mf-songs"></ul>
+      <div><button type="button" id="mf-add-song">添加歌曲</button></div>
+      <div class="mf-error" id="mf-err-songs" hidden></div>
+    </fieldset>
+  </section>
+
+  <section class="card mf-section" aria-labelledby="mf-chant-title">
+    <h2 id="mf-chant-title">口号</h2>
+    <div class="mf-group" data-group="name">
+      <label for="mf-name">名称</label>
+      <input id="mf-name" data-bind="name" aria-describedby="mf-name-hint">
+      <p class="mf-hint" id="mf-name-hint">显示在应援条和 MIX 列表上，最多 32 个字，例如“スタンダードMIX”。</p>
+      <div class="mf-error" id="mf-err-name" hidden></div>
+    </div>
+    <fieldset class="mf-group mf-fieldset" data-group="kind">
+      <legend>种类</legend>
+      <div class="mf-choices">
+        <label><input type="radio" name="mf-kind" value="mix" aria-describedby="mf-kind-hint"> MIX</label>
+        <label><input type="radio" name="mf-kind" value="call" aria-describedby="mf-kind-hint"> call</label>
+      </div>
+      <p class="mf-hint" id="mf-kind-hint"></p>
+      <div class="mf-error" id="mf-err-kind" hidden></div>
+    </fieldset>
+    <div class="mf-group" data-group="text">
+      <label for="mf-text">口号</label>
+      <input id="mf-text" data-bind="text" lang="ja" aria-describedby="mf-text-hint" spellcheck="false">
+      <p class="mf-hint" id="mf-text-hint">按“！”分词。成员名字的位置写 <code>{name}</code>，插入时换成当前成员；花括号本身写 <code>{{</code> 与 <code>}}</code>。</p>
+      <div class="mf-error" id="mf-err-text" hidden></div>
+    </div>
+    <fieldset class="mf-group mf-fieldset" data-group="readings">
+      <legend>逐词读音</legend>
+      <div class="mf-choices" data-only="artist" role="group" aria-label="写哪些读音">
+        <label><input type="checkbox" id="mf-use-kana" aria-describedby="mf-columns-hint"> 平假名</label>
+        <label><input type="checkbox" id="mf-use-romaji" aria-describedby="mf-columns-hint"> 罗马音</label>
+      </div>
+      <p class="mf-hint" id="mf-columns-hint" data-only="artist">不需要的一种可以关掉；都关掉就不写读音。</p>
+      <p class="mf-hint" id="mf-readings-hint">每个词一行。读音里的成员名字也写 <code>{name}</code>。<span data-only="proposal">通用 MIX 两种读音都要写。</span></p>
+      <p class="mf-hint" id="mf-readings-empty">填好口号后，这里按“！”列出每个词。</p>
+      <p class="mf-hint" id="mf-readings-off" hidden>不写读音。</p>
+      <div class="mf-table-wrap" id="mf-readings-wrap" hidden>
+        <table class="mf-table">
+          <caption class="visually-hidden">每个词的读音</caption>
+          <thead><tr><th scope="col">词</th><th scope="col" data-column="kana">平假名</th><th scope="col" data-column="romaji">罗马音</th></tr></thead>
+          <tbody id="mf-readings"></tbody>
+        </table>
+      </div>
+      <div class="mf-error" id="mf-err-readings" hidden></div>
+    </fieldset>
+    <div class="mf-group" data-group="romaji">
+      <label for="mf-romaji">整句罗马音<span data-only="artist">（可选）</span></label>
+      <input id="mf-romaji" data-bind="romaji" lang="ja-Latn" aria-describedby="mf-romaji-hint" spellcheck="false">
+      <p class="mf-hint" id="mf-romaji-hint">与内置库同样写法：首字母大写，长音写 ā ī ū ē ō，例如“Taigā! Faiyā!”。</p>
+      <div class="mf-error" id="mf-err-romaji" hidden></div>
+    </div>
+    <div class="mf-group" data-group="id">
+      <label for="mf-id">编号</label>
+      <input id="mf-id" data-bind="id" aria-describedby="mf-id-hint" spellcheck="false" autocapitalize="off" inputmode="url">
+      <p class="mf-hint" id="mf-id-hint"></p>
+      <div class="mf-error" id="mf-err-id" hidden></div>
+    </div>
+  </section>
+
+  <section class="card mf-section" aria-labelledby="mf-use-title">
+    <h2 id="mf-use-title">长度与位置</h2>
+    <fieldset class="mf-group mf-fieldset" data-group="bars">
+      <legend>小节数</legend>
+      <div class="mf-bars">
+        <label for="mf-bars-min">最少</label>
+        <input id="mf-bars-min" data-bind="barsMin" type="number" min="1" max="64" step="1" inputmode="numeric" aria-describedby="mf-bars-hint">
+        <label for="mf-bars-max">最多</label>
+        <input id="mf-bars-max" data-bind="barsMax" type="number" min="1" max="64" step="1" inputmode="numeric" aria-describedby="mf-bars-hint">
+      </div>
+      <p class="mf-hint" id="mf-bars-hint">喊完一遍大约占几个小节；长度固定时两个数相同。</p>
+      <div class="mf-error" id="mf-err-bars" hidden></div>
+    </fieldset>
+    <fieldset class="mf-group mf-fieldset" data-group="positions">
+      <legend>常见位置</legend>
+      <div class="mf-choices" id="mf-positions"></div>
+      <p class="mf-hint" id="mf-positions-hint">推荐 MIX 时按这里找位置；都不选就不参与推荐。</p>
+      <div class="mf-error" id="mf-err-positions" hidden></div>
+    </fieldset>
+    <div class="mf-group" data-group="note">
+      <label for="mf-note">说明（可选）</label>
+      <input id="mf-note" data-bind="note" aria-describedby="mf-note-hint">
+      <p class="mf-hint" id="mf-note-hint">一句话，最多 200 字，例如常和哪条 MIX 连着喊。</p>
+      <div class="mf-error" id="mf-err-note" hidden></div>
+    </div>
+    <div class="mf-group" data-group="readingNote" id="mf-reading-note-group">
+      <label for="mf-reading-note">读音说明（可选）</label>
+      <input id="mf-reading-note" data-bind="readingNote" aria-describedby="mf-reading-note-hint">
+      <p class="mf-hint" id="mf-reading-note-hint">读音有几种说法时写在这里，最多 200 字。</p>
+      <div class="mf-error" id="mf-err-readingNote" hidden></div>
+    </div>
+  </section>
+
+  <section class="card mf-section" data-only="proposal" aria-labelledby="mf-sources-title">
+    <h2 id="mf-sources-title">核对来源</h2>
+    <fieldset class="mf-group mf-fieldset" data-group="sources">
+      <legend>公开网页（2–10 个）</legend>
+      <p class="mf-hint" id="mf-sources-hint">每个网页都要能看到这条口号，最好来自不同的网站。</p>
+      <ul class="mf-rows" id="mf-sources"></ul>
+      <div><button type="button" id="mf-add-source">添加网页</button></div>
+      <div class="mf-error" id="mf-err-sources" hidden></div>
+    </fieldset>
+    <div class="mf-group" data-group="retrieved">
+      <label for="mf-retrieved">读取日期</label>
+      <input id="mf-retrieved" data-bind="retrieved" type="date" aria-describedby="mf-retrieved-hint">
+      <p class="mf-hint" id="mf-retrieved-hint">你看这些网页的日期。</p>
+      <div class="mf-error" id="mf-err-retrieved" hidden></div>
+    </div>
+  </section>
+
+  <section class="card mf-section" data-only="artist" aria-labelledby="mf-credits-title">
+    <h2 id="mf-credits-title">署名与来源</h2>
+    <div class="mf-group mf-credits" data-group="credits">
+      <fieldset class="mf-fieldset">
+        <legend>作者</legend>
+        <p class="mf-hint" id="mf-authors-hint">可以用昵称；链接可选（个人主页或社交账号）。</p>
+        <ul class="mf-rows" id="mf-authors"></ul>
+        <div><button type="button" id="mf-add-author">添加作者</button></div>
+      </fieldset>
+      <fieldset class="mf-fieldset">
+        <legend>这条 MIX 是</legend>
+        <div class="mf-choices mf-permissions">
+          <label><input type="radio" name="mf-permission" value="original" aria-describedby="mf-permission-hint"> 自己创作</label>
+          <label><input type="radio" name="mf-permission" value="open-license" aria-describedby="mf-permission-hint"> 有开放许可</label>
+          <label><input type="radio" name="mf-permission" value="consented" aria-describedby="mf-permission-hint"> 原作者同意转载</label>
+        </div>
+        <p class="mf-hint" id="mf-permission-hint">只是在网上见过的口号不收。</p>
+      </fieldset>
+      <div class="mf-pair">
+        <label for="mf-license" id="mf-license-label">许可</label>
+        <select id="mf-license" aria-describedby="mf-license-hint"></select>
+        <p class="mf-hint" id="mf-license-hint"></p>
+      </div>
+      <div class="mf-pair" id="mf-source-row">
+        <label for="mf-source-link">来源链接</label>
+        <input id="mf-source-link" type="url" inputmode="url" placeholder="https://" aria-describedby="mf-source-hint" spellcheck="false">
+        <p class="mf-hint" id="mf-source-hint"></p>
+      </div>
+      <p class="mf-hint" id="mf-extra-sources" hidden></p>
+      <div class="mf-pair">
+        <label for="mf-credit-note">署名说明（可选）</label>
+        <input id="mf-credit-note" aria-describedby="mf-credit-note-hint">
+        <p class="mf-hint" id="mf-credit-note-hint">一句话，最多 200 字。</p>
+      </div>
+      <div class="mf-error" id="mf-err-credits" hidden></div>
+    </div>
+  </section>
+</form>
+
+<section class="card mf-output" aria-labelledby="mf-output-title">
+  <h2 id="mf-output-title">检查与预览</h2>
+  <div id="mf-summary" class="mf-summary"></div>
+  <p id="mf-live" class="visually-hidden" role="status" aria-live="polite"></p>
+
+  <h3 class="mf-subtitle">应援条上的样子</h3>
+  <div class="mf-preview" id="mf-preview"></div>
+
+  <div class="mf-actions">
+    <button type="button" id="mf-download">下载文件</button>
+    <button type="button" id="mf-submit" class="primary" aria-describedby="mf-submit-note">投稿到 GitHub</button>
+  </div>
+  <p class="mf-note" id="mf-submit-note"></p>
+
+  <label class="mf-subtitle" for="mf-file">文件内容</label>
+  <textarea id="mf-file" class="mf-file" readonly spellcheck="false" wrap="off" rows="14"></textarea>
+</section>
+</div>
+</div>

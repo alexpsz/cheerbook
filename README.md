@@ -34,14 +34,16 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 | [`cheers/`](./cheers/) | 社区投稿的应援文件：`cheers/<艺人>/<歌名>/<文件名>.cheer.json` |
 | [`index.json`](./index.json) | 全部收录文件的索引（合并后自动生成） |
 | [`spec/`](./spec/) | 格式说明、JSON Schema、对照样例与内置 MIX 库 |
-| [`lib/`](./lib/)、[`tools/`](./tools/)、[`tests/`](./tests/) | 读取器与自动检查（Node.js，无依赖） |
+| [`lib/`](./lib/)、[`tools/`](./tools/)、[`tests/`](./tests/) | 读取器、自动检查与网站生成（Node.js，无依赖） |
+| [`site/`](./site/) | 网站的样式、脚本与图标 |
 | [`docs/`](./docs/) | 审核标准与下架规则 |
 
 在本地运行检查（需要 Node.js 22 或更新版本）：
 
 ```sh
-npm test          # 读取器对照 spec/ 的样例，以及社区规则的测试
+npm test          # 读取器对照 spec/ 的样例、社区规则与网站生成的测试
 npm run check     # 检查 cheers/ 下的全部文件与 MIX 库
+npm run site      # 生成网站到 _site/
 ```
 
 ## 路线

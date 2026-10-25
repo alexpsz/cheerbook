@@ -1,0 +1,102 @@
+/* CheerBook website. System fonts only: the site loads nothing from other hosts. */
+:root {
+  color-scheme: light dark;
+  --bg: #FBFAFC;
+  --surface: #FFFFFF;
+  --text: #1C1B22;
+  --muted: #5C5A66;
+  --line: #E4E2EA;
+  --accent: #C4006D;
+  --accent-soft: #FCE6F1;
+  --focus: #0A64D6;
+  --radius: 14px;
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131217;
+    --surface: #1C1B22;
+    --text: #F2F1F5;
+    --muted: #A9A6B4;
+    --line: #2E2C37;
+    --accent: #FF6FB1;
+    --accent-soft: #3A1B2B;
+    --focus: #6AA8FF;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.7 var(--font);
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+:lang(ja) { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Noto Sans JP", "Yu Gothic", sans-serif; }
+[hidden] { display: none !important; }
+code { font-family: var(--mono); font-size: 0.9em; background: var(--accent-soft); padding: 0.1em 0.35em; border-radius: 6px; }
+.skip { position: absolute; left: -9999px; top: 0; }
+.skip:focus { left: 16px; top: 8px; background: var(--surface); padding: 8px 12px; z-index: 2; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+
+header.site { border-bottom: 1px solid var(--line); background: var(--surface); }
+header.site .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; min-height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); text-decoration: none; font-size: 1.1rem; }
+.brand img { width: 28px; height: 28px; }
+nav.site { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; }
+nav.site a { color: var(--muted); text-decoration: none; padding: 4px 0; }
+nav.site a[aria-current="page"], nav.site a:hover { color: var(--text); }
+
+main { padding: 32px 0 56px; }
+.hero h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.25; margin: 0 0 12px; letter-spacing: -0.01em; }
+.hero p { color: var(--muted); font-size: 1.08rem; max-width: 46em; margin: 0 0 8px; }
+.stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 8px; padding: 0; list-style: none; }
+.stats li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 18px; min-width: 120px; }
+.stats strong { display: block; font-size: 1.6rem; line-height: 1.2; }
+.stats span { color: var(--muted); font-size: 0.9rem; }
+
+section { margin-top: 40px; }
+h2 { font-size: 1.35rem; margin: 0 0 12px; }
+h3 { font-size: 1.1rem; margin: 0 0 6px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.grid .card p { margin: 0; color: var(--muted); }
+ol.steps { margin: 0; padding-left: 1.4em; }
+ol.steps li { margin: 4px 0; }
+
+.filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
+.filter label { font-weight: 600; }
+.filter input { flex: 1 1 220px; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+#filter-status { color: var(--muted); font-size: 0.92rem; }
+.artist { margin-top: 20px; }
+.artist > h3 { font-size: 1.05rem; color: var(--muted); font-weight: 600; }
+.artist > h3, .song h4, .files span, .chant, .romaji, dl.facts dd { overflow-wrap: anywhere; }
+.songs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.song h4 { margin: 0 0 6px; font-size: 1.05rem; }
+.files { list-style: none; margin: 0; padding: 0; }
+.files li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.files li:first-child { border-top: 0; }
+.meta { color: var(--muted); font-size: 0.92rem; }
+.actions { margin-left: auto; display: flex; gap: 14px; }
+.empty { text-align: center; padding: 28px 20px; }
+.empty p { color: var(--muted); margin: 0 0 8px; }
+
+.mix { display: grid; gap: 14px; }
+.mix article header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 8px; }
+.badge { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 10px; }
+.chant { font-size: 1.12rem; line-height: 1.8; margin: 0 0 4px; word-break: break-word; }
+.romaji { color: var(--muted); margin: 0 0 10px; word-break: break-word; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: 0.94rem; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+
+footer.site { border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; padding: 24px 0 40px; }
+footer.site p { margin: 4px 0; }
+
+@media (max-width: 560px) {
+  nav.site { margin-left: 0; }
+  .actions { margin-left: 0; }
+}

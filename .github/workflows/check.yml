@@ -38,6 +38,14 @@ jobs:
       - name: 检查应援文件与 MIX 库
         if: ${{ !cancelled() }}
         run: node base/tools/check.js target
+      - name: 生成网站
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f base/tools/build-site.js ]; then
+            node base/tools/build-site.js "$RUNNER_TEMP/site" --root target
+          else
+            echo "基准分支还没有网站生成工具，跳过。"
+          fi
       - name: 测试
         if: ${{ !cancelled() }}
         working-directory: target

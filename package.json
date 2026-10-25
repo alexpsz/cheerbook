@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "check": "node tools/check.js",
-    "index": "node tools/build-index.js"
+    "index": "node tools/build-index.js",
+    "site": "node tools/build-site.js"
   },
   "engines": {
     "node": ">=22"

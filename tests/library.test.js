@@ -149,6 +149,11 @@ test('the MIX library that ships passes every entry rule, and broken entries are
   broken.entries[1].text = 42;
   fs.writeFileSync(file, JSON.stringify(broken));
   assert.equal(library.checkMixLibrary(root).length, 3);
+  const linked = makeLibrary({});
+  const real = path.join(linked, 'spec', 'mix-library.json');
+  fs.renameSync(real, path.join(linked, 'real.json'));
+  fs.symlinkSync(path.join(linked, 'real.json'), real);
+  assert.match(library.checkMixLibrary(linked)[0].message, /不是普通文件/);
 });
 
 test('the index is the same for the same library, whatever the order files were added in', () => {
@@ -177,4 +182,10 @@ test('a pull request may not mix contributions with other changes', () => {
   const code = scope('lib/cheer.js\0README.md\0');
   assert.equal(code.status, 0);
   assert.match(code.stdout, /逐行审查/);
+  for (const file of ['site/app.js', 'functions/[[path]].js', 'wrangler.toml', '.node-version', '.github/workflows/check.yml', 'docs/../tools/x.js']) {
+    assert.match(scope(file + '\0').stdout, /逐行审查/, file);
+  }
+  for (const file of ['README.md', 'docs/review.md', 'memory-bank/progress.md']) {
+    assert.doesNotMatch(scope(file + '\0').stdout, /逐行审查/, file);
+  }
 });

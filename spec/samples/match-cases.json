@@ -1,0 +1,97 @@
+{
+  "format": "liveglow-cheer-match-cases",
+  "version": 1,
+  "description": "Which songs a file belongs to (README §8). \"file\" is the file's song; \"playing\" is what the player reports; \"expected\" is the match strength (isrc > catalog > metadata) or null for no match.",
+  "cases": [
+    {
+      "description": "Same ISRC decides, whatever the names (hyphens and case do not matter).",
+      "file": { "title": "合成曲目", "artist": "合成组合", "duration": 200, "isrc": "XXAB12600001" },
+      "playing": { "title": "Other Title", "artist": "Other Artist", "duration": 90, "isrc": "xx-ab1-26-00001" },
+      "expected": "isrc"
+    },
+    {
+      "description": "A different ISRC refuses even when every name matches (a live take is another recording).",
+      "file": { "title": "合成曲目", "artist": "合成组合", "duration": 200, "isrc": "XXAB12600001" },
+      "playing": { "title": "合成曲目", "artist": "合成组合", "duration": 200, "isrc": "XXAB12600002" },
+      "expected": null
+    },
+    {
+      "description": "Without an ISRC on one side, the same Apple Music id matches.",
+      "file": { "title": "合成曲目", "artist": "合成组合", "duration": 200, "isrc": "XXAB12600001", "appleMusicID": "123" },
+      "playing": { "title": "Other", "artist": "Other", "duration": 90, "appleMusicID": "123" },
+      "expected": "catalog"
+    },
+    {
+      "description": "A different Apple Music id does not refuse; names and duration still match.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200, "appleMusicID": "123" },
+      "playing": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200, "appleMusicID": "999" },
+      "expected": "metadata"
+    },
+    {
+      "description": "Names compare without case, spaces or punctuation.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200 },
+      "playing": { "title": "synthetic  anthem!", "artist": "FIXTURE-UNIT", "duration": 200 },
+      "expected": "metadata"
+    },
+    {
+      "description": "Full-width letters and accents fold.",
+      "file": { "title": "Café Song", "artist": "Ｆｉｘｔｕｒｅ", "duration": 200 },
+      "playing": { "title": "cafe song", "artist": "fixture", "duration": 200 },
+      "expected": "metadata"
+    },
+    {
+      "description": "Markup tags are removed before comparing.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200 },
+      "playing": { "title": "<b>Synthetic</b> Anthem", "artist": "Fixture Unit", "duration": 200 },
+      "expected": "metadata"
+    },
+    {
+      "description": "Durations within 3 seconds match.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200 },
+      "playing": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 202.9 },
+      "expected": "metadata"
+    },
+    {
+      "description": "Durations 3.5 seconds apart on a short song do not.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200 },
+      "playing": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 203.5 },
+      "expected": null
+    },
+    {
+      "description": "On a long song the allowance is 1.5% of the playing duration (6 s at 400 s).",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 405.9 },
+      "playing": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 400 },
+      "expected": "metadata"
+    },
+    {
+      "description": "Just past 1.5% does not match.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 406.1 },
+      "playing": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 400 },
+      "expected": null
+    },
+    {
+      "description": "A different title (a live version) does not match.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200 },
+      "playing": { "title": "Synthetic Anthem (Live)", "artist": "Fixture Unit", "duration": 200 },
+      "expected": null
+    },
+    {
+      "description": "A title of punctuation only never matches.",
+      "file": { "title": "!!!", "artist": "Fixture Unit", "duration": 200 },
+      "playing": { "title": "!!!", "artist": "Fixture Unit", "duration": 200 },
+      "expected": null
+    },
+    {
+      "description": "An empty ISRC on the playing side counts as none.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200, "isrc": "XXAB12600001" },
+      "playing": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200, "isrc": "" },
+      "expected": "metadata"
+    },
+    {
+      "description": "Different artists do not match.",
+      "file": { "title": "Synthetic Anthem", "artist": "Fixture Unit", "duration": 200 },
+      "playing": { "title": "Synthetic Anthem", "artist": "Other Unit", "duration": 200 },
+      "expected": null
+    }
+  ]
+}

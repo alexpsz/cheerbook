@@ -1,0 +1,7 @@
+{
+  "format": "liveglow-cheer",
+  "version": 1,
+  "song": { "title": "合成曲目", "artist": "合成组合", "duration": 180 },
+  "events": [],
+  "credits": { "authors": [{ "name": "合成作者" }], "permission": "original" }
+}

@@ -1,0 +1,44 @@
+# Checks every pull request and every push to main. The checks themselves (lib/, tools/) are taken
+# from the base branch and run on the pull request's files as data, so a pull request cannot
+# change the rules it is checked by. The pull request's own tests run afterwards for code changes.
+# Read-only: no step writes to the repository and the token is never kept in the checkout.
+name: 检查
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 取出待检查的内容
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: target
+          fetch-depth: 2
+          persist-credentials: false
+      - name: 取出基准分支的检查代码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: base
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: 修改范围
+        if: github.event_name == 'pull_request'
+        run: git -C target diff -z --name-only HEAD^1 HEAD | node base/tools/scope.js
+      - name: 检查应援文件与 MIX 库
+        if: ${{ !cancelled() }}
+        run: node base/tools/check.js target
+      - name: 测试
+        if: ${{ !cancelled() }}
+        working-directory: target
+        run: node --test tests/*.test.js

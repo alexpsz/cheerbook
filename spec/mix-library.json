@@ -1,0 +1,188 @@
+{
+  "format": "liveglow-cheer-mix-library",
+  "version": 1,
+  "license": "CC0-1.0",
+  "description": "Built-in MIX library of Liveglow (映场) and CheerBook: Japanese idol-scene chants judged generic by cross-checking independent public pages (each read once on the date in \"retrieved\"). Community tradition, credited as \"应援圈传统\"; no site's categories, order or notes are copied. Group-specific chants are not included.",
+  "credit": "应援圈传统",
+  "retrieved": "2026-10-18",
+  "sources": {
+    "W": "https://ja.wikipedia.org/wiki/ヲタ芸",
+    "C": "https://choconono.com/idol-call-dictionary/",
+    "G": "https://galpo.info/feature/list/1741",
+    "K": "https://xn--nzwp98desh.com/post/2019/01/06/1741/",
+    "I": "https://i-me.media/archives/fans/call/",
+    "P": "https://popidolblog.com/mix-types",
+    "A": "https://ameblo.jp/aoirokucho/entry-12274207791.html",
+    "N": "https://note.com/idolest_fan/n/n9f6b54873f51",
+    "H": "https://hiyoko-dreaming-idol.com/48-call",
+    "B": "https://note.com/kohei_0921/n/n8c88fce18a74",
+    "E": "https://note.com/pecoramu0/n/n6d5384486b65",
+    "R": "https://ramendiet.net/notheme/post-58578/",
+    "S": "https://taigakarafaiya.substack.com/p/in-progresscomplete-collection-of"
+  },
+  "entries": [
+    {
+      "id": "standard",
+      "name": "スタンダードMIX",
+      "kind": "mix",
+      "text": "（よっしゃー！いくぞー！）タイガー！ファイヤー！サイバー！ファイバー！ダイバー！バイバー！ジャージャー！",
+      "romaji": "(Yossha! Ikuzo!) Taigā! Faiyā! Saibā! Faibā! Daibā! Baibā! Jājā!",
+      "bars": [4, 6],
+      "positions": ["intro", "chorusLead", "interlude"],
+      "sources": ["C", "G", "K", "I", "P", "N", "H"],
+      "note": "8 小节的前奏可加“ファイボー！ワイパー！”",
+      "readings": {
+        "kana": ["よっしゃー", "いくぞー", "たいがー", "ふぁいやー", "さいばー", "ふぁいばー", "だいばー", "ばいばー", "じゃーじゃー"],
+        "romaji": ["Yossha", "Ikuzo", "Taigā", "Faiyā", "Saibā", "Faibā", "Daibā", "Baibā", "Jājā"]
+      }
+    },
+    {
+      "id": "japanese",
+      "name": "ジャパニーズMIX",
+      "kind": "mix",
+      "text": "虎！火！人造！繊維！海女！振動！化繊！（飛！除去！）",
+      "romaji": "Tora! Hi! Jinzō! Sen'i! Ama! Shindō! Kasen! (Tobi! Jokyo!)",
+      "bars": [4, 6],
+      "positions": ["afterMix", "interlude"],
+      "sources": ["C", "G", "K", "I", "P", "N", "H"],
+      "note": "常紧接スタンダードMIX；“飛！除去！”可省",
+      "readings": {
+        "kana": ["とら", "ひ", "じんぞう", "せんい", "あま", "しんどう", "かせん", "とび", "じょきょ"],
+        "romaji": ["Tora", "Hi", "Jinzō", "Sen'i", "Ama", "Shindō", "Kasen", "Tobi", "Jokyo"]
+      }
+    },
+    {
+      "id": "ainu",
+      "name": "アイヌ語MIX",
+      "kind": "mix",
+      "text": "チャペ！アペ！カラ！キナ！ララ！トゥスケ！ミョーホントゥスケ！",
+      "romaji": "Chape! Ape! Kara! Kina! Rara! Tusuke! Myōhontusuke!",
+      "bars": [4, 8],
+      "positions": ["afterMix", "interlude", "outro"],
+      "sources": ["C", "G", "K", "I", "P", "N", "H"],
+      "note": "前奏第三段，或间奏、尾奏",
+      "readings": {
+        "kana": ["ちゃぺ", "あぺ", "から", "きな", "らら", "とぅすけ", "みょーほんとぅすけ"],
+        "romaji": ["Chape", "Ape", "Kara", "Kina", "Rara", "Tusuke", "Myōhontusuke"]
+      }
+    },
+    {
+      "id": "ainu-wisupe",
+      "name": "アイヌ語MIX（ウィスゥペ版）",
+      "kind": "mix",
+      "text": "チャペ！アペ！カラ！キナ！ララ！トゥスケ！ウィスゥペ！（ケスィ！スィスゥパ！）",
+      "romaji": "Chape! Ape! Kara! Kina! Rara! Tusuke! Wisupe! (Kesi! Sisupa!)",
+      "bars": [4, 8],
+      "positions": ["outro"],
+      "sources": ["G", "K", "I", "N"],
+      "note": "曲末收尾，部分曲目",
+      "readings": {
+        "kana": ["ちゃぺ", "あぺ", "から", "きな", "らら", "とぅすけ", "うぃすぅぺ", "けすぃ", "すぃすぅぱ"],
+        "romaji": ["Chape", "Ape", "Kara", "Kina", "Rara", "Tusuke", "Wisupe", "Kesi", "Sisupa"]
+      }
+    },
+    {
+      "id": "chaos",
+      "name": "混沌MIX（ワールドカオス）",
+      "kind": "mix",
+      "text": "ワールドカオス！諸行！木暮！時雨！神楽！金剛山！翔襲叉！（黒雲！無常！世界混沌！）",
+      "romaji": "Wārudo kaosu! Shogyō! Kogure! Shigure! Kagura! Kongōsan! Shōshūsha! (Kokuun! Mujō! Sekai konton!)",
+      "bars": [8, 10],
+      "positions": ["interlude"],
+      "sources": ["C", "G", "I", "P", "A"],
+      "note": "间奏、落ちサビ；有人想听歌词，用前先确认现场习惯",
+      "readings": {
+        "kana": ["わーるどかおす", "しょぎょう", "こぐれ", "しぐれ", "かぐら", "こんごうさん", "しょうしゅうしゃ", "こくうん", "むじょう", "せかいこんとん"],
+        "romaji": ["Wārudo kaosu", "Shogyō", "Kogure", "Shigure", "Kagura", "Kongōsan", "Shōshūsha", "Kokuun", "Mujō", "Sekai konton"]
+      },
+      "readingNote": "“翔襲叉”是 MIX 自造词，读音“しょうしゅうしゃ”只见于 MIX 来源；“金剛山”按来源读“こんごうさん”。"
+    },
+    {
+      "id": "gachikoi",
+      "name": "ガチ恋口上",
+      "kind": "mix",
+      "text": "言いたいことがあるんだよ！やっぱり{name}はかわいいよ！好き好き大好き、やっぱ好き！やっと見つけたお姫様！俺が生まれてきた理由！それはお前に出会うため！俺と一緒に人生歩もう！世界で一番愛してる！ア・イ・シ・テ・ル！",
+      "romaji": "Iitai koto ga arunda yo! Yappari {name} wa kawaii yo! … Sekai de ichiban aishiteru! A・I・SHI・TE・RU!",
+      "bars": [16, 18],
+      "positions": ["interlude"],
+      "sources": ["C", "G", "K", "I", "P", "S"],
+      "note": "长间奏；{name} 填当前成员",
+      "readings": {
+        "kana": ["いいたいことがあるんだよ", "やっぱり{name}はかわいいよ", "すきすきだいすき、やっぱすき", "やっとみつけたおひめさま", "おれがうまれてきたりゆう", "それはおまえにであうため", "おれといっしょにじんせいあゆもう", "せかいでいちばんあいしてる", "あ・い・し・て・る"],
+        "romaji": ["Iitai koto ga arun da yo", "Yappari {name} wa kawaii yo", "Suki suki daisuki, yappa suki", "Yatto mitsuketa ohime-sama", "Ore ga umarete kita riyū", "Sore wa omae ni deau tame", "Ore to issho ni jinsei ayumō", "Sekai de ichiban aishiteru", "A・I・SHI・TE・RU"]
+      }
+    },
+    {
+      "id": "ppph",
+      "name": "PPPH",
+      "kind": "call",
+      "text": "パン パパン（ヒュー）× 4",
+      "romaji": "Pan papan (Hyū) × 4",
+      "bars": [4, 4],
+      "positions": ["verse"],
+      "sources": ["W", "C"],
+      "note": "B 段有人唱时的手拍子",
+      "readings": { "kana": ["ぱん ぱぱん（ひゅー）× 4"], "romaji": ["Pan papan (hyū) × 4"] }
+    },
+    {
+      "id": "encho",
+      "name": "園長MIX",
+      "kind": "mix",
+      "text": "ファイボー！ワイパー！ファーマー！ジャスパー！ホワイパー！クーパー！イエスクレイパー！",
+      "romaji": "Faibō! Waipā! Fāmā! Jasupā! Howaipā! Kūpā! Iesu kureipā!",
+      "bars": [4, 4],
+      "positions": ["afterMix"],
+      "sources": ["G", "K", "I"],
+      "note": "接在スタンダードMIX 后，用于 12 小节前奏；部分现场才用",
+      "readings": {
+        "kana": ["ふぁいぼー", "わいぱー", "ふぁーまー", "じゃすぱー", "ほわいぱー", "くーぱー", "いえすくれいぱー"],
+        "romaji": ["Faibō", "Waipā", "Fāmā", "Jasupā", "Howaipā", "Kūpā", "Iesu kureipā"]
+      }
+    },
+    {
+      "id": "oborozuki",
+      "name": "朧月MIX",
+      "kind": "mix",
+      "text": "有明！十六夜！朧月！朔月！三光！氷輪！月下！金烏玉兎！日月星辰！幻月！無月！天満月！",
+      "romaji": "Ariake! Izayoi! Oborozuki! Sakugetsu! Sankō! Hyōrin! Gekka! Kin'u gyokuto! Jitsugetsu seishin! Gengetsu! Mugetsu! Amamitsutsuki!",
+      "bars": [8, 8],
+      "positions": ["interlude"],
+      "sources": ["B", "E", "R"],
+      "note": "月的别称串成的 MIX；常放在副歌之后的间奏",
+      "readings": {
+        "kana": ["ありあけ", "いざよい", "おぼろづき", "さくげつ", "さんこう", "ひょうりん", "げっか", "きんうぎょくと", "じつげつせいしん", "げんげつ", "むげつ", "あまみつつき"],
+        "romaji": ["Ariake", "Izayoi", "Oborozuki", "Sakugetsu", "Sankō", "Hyōrin", "Gekka", "Kin'u gyokuto", "Jitsugetsu seishin", "Gengetsu", "Mugetsu", "Amamitsutsuki"]
+      }
+    },
+    {
+      "id": "spanish",
+      "name": "スペイン語MIX",
+      "kind": "mix",
+      "text": "（バーモス）ティグレ！フェゴ！シベル！フィブラ！ブゾ！ビブラル！ヘルセイ！（ボラーレ！リンピアパラブリサス！）",
+      "romaji": "(Bāmosu) Tiguré! Fego! Shiberu! Fibura! Buzo! Biburaru! Herusei! (Borāre! Rinpiaparaburisasu!)",
+      "bars": [4, 8],
+      "positions": ["outro"],
+      "sources": ["G", "A", "C"],
+      "note": "スタンダードMIX 的西班牙语版；多用于较长的尾奏，部分曲目才用",
+      "readings": {
+        "kana": ["ばーもす てぃぐれ", "ふぇご", "しべる", "ふぃぶら", "ぶぞ", "びぶらる", "へるせい", "ぼらーれ", "りんぴあぱらぶりさす"],
+        "romaji": ["Bāmosu Tigure", "Fego", "Shiberu", "Fibura", "Buzo", "Biburaru", "Herusei", "Borāre", "Rinpiaparaburisasu"]
+      }
+    },
+    {
+      "id": "arabic",
+      "name": "アラビア語MIX",
+      "kind": "mix",
+      "text": "スィフリーアスィール！ナミル！ナール！スィナーイー！ナスィージュ！ガタサ！ハッザ！ハイトゥンシナーイー！",
+      "romaji": "Sifurī asīru! Namiru! Nāru! Sinā'ī! Nasīju! Gatasa! Hazza! Haitun sinā'ī!",
+      "bars": [4, 8],
+      "positions": [],
+      "sources": ["G", "A"],
+      "note": "スタンダードMIX 的阿拉伯语版；来源没给小节数和位置，小节为估计，不参与自动推荐",
+      "readings": {
+        "kana": ["すぃふりーあすぃーる", "なみる", "なーる", "すぃなーいー", "なすぃーじゅ", "がたさ", "はっざ", "はいとぅんしなーいー"],
+        "romaji": ["Sifurī asīru", "Namiru", "Nāru", "Sinā'ī", "Nasīju", "Gatasa", "Hazza", "Haitun sinā'ī"]
+      }
+    }
+  ]
+}

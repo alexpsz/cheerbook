@@ -1,0 +1,40 @@
+{
+  "format": "liveglow-cheer",
+  "version": 1,
+  "song": {
+    "title": "合成曲目 Synthetic Anthem",
+    "artist": "合成组合 Fixture Unit",
+    "duration": 200,
+    "album": "合成专辑",
+    "isrc": "xx-ab1-26-00001",
+    "appleMusicID": "1234567890"
+  },
+  "offset": 0.5,
+  "members": [{ "id": "a", "name": "成员甲", "color": "#E4007F" }, { "id": "b", "name": "成员乙", "color": "#00a0e9" }],
+  "events": [
+    { "start": 40, "end": 50, "kind": "part", "members": ["a"] },
+    {
+      "start": 2,
+      "end": 8,
+      "kind": "mix",
+      "text": "（合成！）甲！乙！丙！",
+      "members": ["a", "b"],
+      "mixRef": "tradition:standard",
+      "steps": [0, 1.5, 3, 4.5],
+      "readings": { "kana": ["ごうせい", "こう", "おつ", "へい"], "romaji": ["Gōsei", "Kō", "Otsu", "Hei"] }
+    },
+    { "start": 45, "end": 55, "kind": "part", "members": ["b"] },
+    { "start": 52, "end": 53, "kind": "call", "text": "合成！", "name": "我的口号" },
+    { "start": 55, "end": 57, "kind": "call", "echo": true },
+    { "start": 58, "end": 59, "kind": "note", "text": "举灯" },
+    { "start": 60, "end": 64, "kind": "mix", "text": "嘿！嘿！", "steps": [0, 2], "tapped": true, "name": "自制 MIX" }
+  ],
+  "credits": {
+    "authors": [{ "name": "合成作者", "url": "https://example.com/maker" }],
+    "sources": [{ "kind": "self", "title": "边听边打轴", "url": "https://example.com/notes", "retrieved": "2026-10-18" }],
+    "permission": "original",
+    "license": "CC-BY-4.0",
+    "note": "合成样例，仅供测试。"
+  },
+  "generator": "CheerBook sample"
+}

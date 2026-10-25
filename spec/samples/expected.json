@@ -1,0 +1,862 @@
+{
+  "format": "liveglow-cheer-expected",
+  "version": 1,
+  "description": "Expected result of reading each sample as a shared file (README §7). \"errors\" and \"warnings\" compare as unordered sets of {code, path, detail}; \"schema\" says whether cheer.schema.json alone accepts the file (null: not JSON); \"eventStarts\" are the starts of the loaded events, known kinds only, in reading order; \"sharing\" is shareable or localOnly.",
+  "samples": [
+    {
+      "file": "valid/minimal.cheer.json",
+      "description": "Only the required fields; no events.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [],
+      "schema": true
+    },
+    {
+      "file": "valid/full-fields.cheer.json",
+      "description": "Every v1 field, events out of order and overlapping; the ISRC is read uppercased without hyphens.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [2, 40, 45, 52, 55, 58, 60],
+      "isrc": "XXAB12600001",
+      "schema": true
+    },
+    {
+      "file": "valid/saved-by-liveglow.cheer.json",
+      "description": "A file exactly as Liveglow saves it (sorted keys, events in order); reading and saving it again gives the same bytes.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [2, 40, 45, 52, 55, 58, 60],
+      "isrc": "XXAB12600001",
+      "schema": true
+    },
+    {
+      "file": "valid/name-slots.cheer.json",
+      "description": "Name slots: {name} with the event members, {name:<id>} for one member, {{ and }} as literal braces.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/steps-and-readings.cheer.json",
+      "description": "Steps and readings per word; a closing bracket after \"！\" belongs to the previous word, so \"（合成！）甲！乙！\" has three words; an empty reading is allowed.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/readings-kana-only.cheer.json",
+      "description": "Only one of the two reading lists.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/readings-mismatch.cheer.json",
+      "description": "Readings that do not fit are a warning, not an error: the file loads and those readings are dropped.",
+      "valid": true,
+      "warnings": [
+        { "code": "readings", "path": "events[0].readings" },
+        { "code": "readings", "path": "events[1].readings" },
+        { "code": "readings", "path": "events[2].readings" }
+      ],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/unknown-kind.cheer.json",
+      "description": "An event of an unknown kind is skipped with a warning; only its field types are checked (its negative start is not an error).",
+      "valid": true,
+      "warnings": [{ "code": "unknownKind", "path": "events[1].kind", "detail": "lightstick" }],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/unknown-fields.cheer.json",
+      "description": "Unknown fields at every level are ignored; nesting reaches the depth limit (8) but not past it.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/null-optional.cheer.json",
+      "description": "Optional fields written as null read as absent.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/version-float.cheer.json",
+      "description": "The version may be written 1.0.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/echo-and-tapped-false.cheer.json",
+      "description": "echo: false and tapped: false are the same as leaving them out, on any kind.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/boundaries.cheer.json",
+      "description": "Every limit at its largest allowed value.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [0, 100, 200, 300, 7000],
+      "schema": true
+    },
+    {
+      "file": "valid/whitespace-set.cheer.json",
+      "description": "Leading and trailing white space from the one trimmed set (D-073 ②) is allowed around text; the text inside counts.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/text-combining-at-limit.cheer.json",
+      "description": "Length counts code points (D-073 ①): 29 × \"e\" + U+0301 plus \"嘿！\" is exactly 60.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/isrc-spaced.cheer.json",
+      "description": "ISRC: hyphens and white space anywhere are removed and ASCII letters uppercased (D-073 ④).",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "isrc": "XXAB12600001",
+      "schema": true
+    },
+    {
+      "file": "valid/link-forms.cheer.json",
+      "description": "Links: http:// or https:// in any case, parsed as a URL; a space in the path is allowed (D-073 ④).",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/bom-prefixed.cheer.json",
+      "description": "A leading UTF-8 byte order mark is dropped before reading (D-073 ⑤).",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/permission-open-license.cheer.json",
+      "description": "Open licence with the licence named: shareable.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/permission-consented.cheer.json",
+      "description": "The original author agreed: shareable.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/permission-public-only.cheer.json",
+      "description": "Only publicly visible: stays on this device.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "localOnly",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/permission-official.cheer.json",
+      "description": "An official guide without permission to repost: stays on this device.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "localOnly",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/permission-unknown.cheer.json",
+      "description": "Permission not stated: stays on this device.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "localOnly",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/original-derived.cheer.json",
+      "description": "Marked original but citing someone else's material: a warning, and the file stays on this device.",
+      "valid": true,
+      "warnings": [{ "code": "derivedMarkedOriginal", "path": "credits.permission" }],
+      "sharing": "localOnly",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "valid/original-without-sources.cheer.json",
+      "description": "Original with no sources listed: shareable.",
+      "valid": true,
+      "warnings": [],
+      "sharing": "shareable",
+      "eventStarts": [10, 20, 30, 40, 50],
+      "schema": true
+    },
+    {
+      "file": "invalid/not-json.cheer.json",
+      "description": "Not JSON at all.",
+      "valid": false,
+      "errors": [{ "code": "notJSON", "path": "" }],
+      "schema": null
+    },
+    {
+      "file": "invalid/top-level-array.cheer.json",
+      "description": "JSON, but not an object.",
+      "valid": false,
+      "errors": [{ "code": "notJSON", "path": "" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/too-large.cheer.json",
+      "description": "Larger than 512 KiB (524288 bytes), padded with spaces.",
+      "valid": false,
+      "errors": [{ "code": "tooLarge", "path": "" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/wrong-format.cheer.json",
+      "description": "Another format name.",
+      "valid": false,
+      "errors": [{ "code": "wrongFormat", "path": "format" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/missing-format.cheer.json",
+      "description": "No format field.",
+      "valid": false,
+      "errors": [{ "code": "wrongFormat", "path": "format" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/version-2.cheer.json",
+      "description": "A newer version: the reader asks to update.",
+      "valid": false,
+      "errors": [{ "code": "unsupportedVersion", "path": "version", "detail": 2 }],
+      "schema": false
+    },
+    {
+      "file": "invalid/version-string.cheer.json",
+      "description": "The version as a string.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "version" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/version-boolean.cheer.json",
+      "description": "The version as a boolean.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "version" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/version-fraction.cheer.json",
+      "description": "A version that is not a whole number.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "version" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/version-missing.cheer.json",
+      "description": "No version field.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "version" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/lyric-key-root.cheer.json",
+      "description": "A lyric key at the top level.",
+      "valid": false,
+      "errors": [{ "code": "lyricField", "path": "lyrics", "detail": "lyrics" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/lyric-key-uppercase.cheer.json",
+      "description": "Lyric keys match without regard to case.",
+      "valid": false,
+      "errors": [{ "code": "lyricField", "path": "events[2].YRC", "detail": "YRC" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/lyric-key-in-unknown-field.cheer.json",
+      "description": "A lyric key inside an unknown field.",
+      "valid": false,
+      "errors": [{ "code": "lyricField", "path": "credits.x-extra.lines", "detail": "lines" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/lyric-key-kelvin.cheer.json",
+      "description": "U+212A KELVIN SIGN lowercases to k, so \"\u212ARC\" is a lyric key.",
+      "valid": false,
+      "errors": [{ "code": "lyricField", "path": "song.\u212ARC", "detail": "\u212ARC" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/too-deep.cheer.json",
+      "description": "Nesting past depth 8 (inside an unknown field).",
+      "valid": false,
+      "errors": [{ "code": "tooDeep", "path": "" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/missing-song-title.cheer.json",
+      "description": "song.title is required.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "song.title" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/missing-events.cheer.json",
+      "description": "events is required.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "events" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/missing-credits.cheer.json",
+      "description": "credits is required.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "credits" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/missing-permission.cheer.json",
+      "description": "credits.permission is required.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "credits.permission" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/start-not-number.cheer.json",
+      "description": "A time written as a string.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "events[0].start" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/members-not-array.cheer.json",
+      "description": "Event members must be a list.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "events[0].members" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/unknown-permission.cheer.json",
+      "description": "A permission value outside the list.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "credits.permission" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/unknown-source-kind.cheer.json",
+      "description": "A source kind outside the list.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "credits.sources[0].kind" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/member-missing-color.cheer.json",
+      "description": "A member needs id, name and color.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "members[0].color" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/readings-wrong-type.cheer.json",
+      "description": "Reading lists are lists of strings.",
+      "valid": false,
+      "errors": [{ "code": "malformed", "path": "events[1].readings.kana" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/blank-title.cheer.json",
+      "description": "A title of spaces only.",
+      "valid": false,
+      "errors": [{ "code": "songTitle", "path": "song.title" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/title-too-long.cheer.json",
+      "description": "A title over 200 characters.",
+      "valid": false,
+      "errors": [{ "code": "songTitle", "path": "song.title" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/blank-artist.cheer.json",
+      "description": "An empty artist.",
+      "valid": false,
+      "errors": [{ "code": "songArtist", "path": "song.artist" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/blank-artist-zero-width-space.cheer.json",
+      "description": "U+200B ZERO WIDTH SPACE is trimmed as white space, so this artist is blank.",
+      "valid": false,
+      "errors": [{ "code": "songArtist", "path": "song.artist" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/blank-title-bom.cheer.json",
+      "description": "U+FEFF is in the trimmed set (D-073 ②), so a title of U+FEFF alone is blank.",
+      "valid": false,
+      "errors": [{ "code": "songTitle", "path": "song.title" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/blank-artist-nel.cheer.json",
+      "description": "U+0085 NEXT LINE is white space, so this artist is blank.",
+      "valid": false,
+      "errors": [{ "code": "songArtist", "path": "song.artist" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/call-text-combining-too-long.cheer.json",
+      "description": "Length counts code points (D-073 ①): 30 × \"e\" + U+0301 plus \"！\" is 61, over 60, though it shows as 31 characters.",
+      "valid": false,
+      "errors": [{ "code": "textTooLong", "path": "events[2].text", "detail": 60 }],
+      "schema": false
+    },
+    {
+      "file": "invalid/isrc-non-ascii.cheer.json",
+      "description": "An ISRC with a full-width digit: any non-ASCII character makes it invalid (D-073 ④).",
+      "valid": false,
+      "errors": [{ "code": "isrc", "path": "song.isrc" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/duplicate-key-root.cheer.json",
+      "description": "The same key twice in one object (D-073 ⑤).",
+      "valid": false,
+      "errors": [{ "code": "duplicateKey", "path": "offset", "detail": "offset" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/duplicate-key-escaped.cheer.json",
+      "description": "Keys compare after escapes: \"text\" and \"\\u0074ext\" are the same key (D-073 ⑤).",
+      "valid": false,
+      "errors": [{ "code": "duplicateKey", "path": "events[2].text", "detail": "text" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/unknown-kind-then-error.cheer.json",
+      "description": "Errors name events by their place in the file, skipped kinds included (D-073 ⑥): the blank call is events[3].",
+      "valid": false,
+      "errors": [{ "code": "textRequired", "path": "events[3].text" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/too-many-events-with-unknown.cheer.json",
+      "description": "2000 known events and one of an unknown kind: the limit counts every event (D-073 ⑥).",
+      "valid": false,
+      "errors": [{ "code": "tooManyEvents", "path": "events" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/duration-zero.cheer.json",
+      "description": "A song duration of 0 (without events, which would also end past the song).",
+      "valid": false,
+      "errors": [{ "code": "songDuration", "path": "song.duration" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/duration-too-long.cheer.json",
+      "description": "A song duration over 7200 seconds.",
+      "valid": false,
+      "errors": [{ "code": "songDuration", "path": "song.duration" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/isrc-bad.cheer.json",
+      "description": "An ISRC that is not 12 characters of the right kind.",
+      "valid": false,
+      "errors": [{ "code": "isrc", "path": "song.isrc" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/apple-music-id-not-digits.cheer.json",
+      "description": "An Apple Music id that is not digits.",
+      "valid": false,
+      "errors": [{ "code": "appleMusicID", "path": "song.appleMusicID" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/offset-out-of-range.cheer.json",
+      "description": "An offset beyond ±10 seconds.",
+      "valid": false,
+      "errors": [{ "code": "offset", "path": "offset" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/generator-too-long.cheer.json",
+      "description": "A generator name over 64 characters.",
+      "valid": false,
+      "errors": [{ "code": "generator", "path": "generator" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/too-many-members.cheer.json",
+      "description": "65 members.",
+      "valid": false,
+      "errors": [{ "code": "tooManyMembers", "path": "members" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/member-id-bad.cheer.json",
+      "description": "A member id with a space.",
+      "valid": false,
+      "errors": [{ "code": "memberID", "path": "members[1].id" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/duplicate-member.cheer.json",
+      "description": "Two members with the same id.",
+      "valid": false,
+      "errors": [{ "code": "duplicateMember", "path": "members[1].id" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/member-name-blank.cheer.json",
+      "description": "A member without a name.",
+      "valid": false,
+      "errors": [{ "code": "memberName", "path": "members[0].name" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/member-color-bad.cheer.json",
+      "description": "A colour that is not #RRGGBB.",
+      "valid": false,
+      "errors": [{ "code": "memberColor", "path": "members[0].color" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/too-many-events.cheer.json",
+      "description": "2001 events.",
+      "valid": false,
+      "errors": [{ "code": "tooManyEvents", "path": "events" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/event-too-short.cheer.json",
+      "description": "An event shorter than 0.05 seconds.",
+      "valid": false,
+      "errors": [{ "code": "eventTime", "path": "events[2]" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/event-negative-start.cheer.json",
+      "description": "An event starting before 0.",
+      "valid": false,
+      "errors": [{ "code": "eventTime", "path": "events[2]" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/event-end-before-start.cheer.json",
+      "description": "An event ending before it starts.",
+      "valid": false,
+      "errors": [{ "code": "eventTime", "path": "events[2]" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/event-past-song-end.cheer.json",
+      "description": "An event ending more than 5 seconds after the song.",
+      "valid": false,
+      "errors": [{ "code": "eventPastSongEnd", "path": "events[4].end" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/unknown-member.cheer.json",
+      "description": "An event naming a member not in the list.",
+      "valid": false,
+      "errors": [{ "code": "unknownMember", "path": "events[0].members", "detail": "z" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/part-without-member.cheer.json",
+      "description": "A part needs a member.",
+      "valid": false,
+      "errors": [{ "code": "partWithoutMember", "path": "events[0].members" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/part-with-text.cheer.json",
+      "description": "A part may not carry text: the words come from the player's lyrics.",
+      "valid": false,
+      "errors": [{ "code": "textForbidden", "path": "events[0].text" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/mix-without-text.cheer.json",
+      "description": "A MIX needs text.",
+      "valid": false,
+      "errors": [{ "code": "textRequired", "path": "events[1].text" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/call-blank-text.cheer.json",
+      "description": "A call whose text is an ideographic space only.",
+      "valid": false,
+      "errors": [{ "code": "textRequired", "path": "events[2].text" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/mix-text-too-long.cheer.json",
+      "description": "MIX text over 120 characters.",
+      "valid": false,
+      "errors": [{ "code": "textTooLong", "path": "events[1].text", "detail": 120 }],
+      "schema": false
+    },
+    {
+      "file": "invalid/call-text-too-long.cheer.json",
+      "description": "Call text over 60 characters.",
+      "valid": false,
+      "errors": [{ "code": "textTooLong", "path": "events[2].text", "detail": 60 }],
+      "schema": false
+    },
+    {
+      "file": "invalid/note-text-too-long.cheer.json",
+      "description": "Note text over 60 characters.",
+      "valid": false,
+      "errors": [{ "code": "textTooLong", "path": "events[4].text", "detail": 60 }],
+      "schema": false
+    },
+    {
+      "file": "invalid/echo-with-text.cheer.json",
+      "description": "A sing-along call may not repeat the line.",
+      "valid": false,
+      "errors": [{ "code": "echo", "path": "events[3].echo" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/echo-on-note.cheer.json",
+      "description": "Only a call can sing along.",
+      "valid": false,
+      "errors": [{ "code": "echo", "path": "events[4].echo" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/slot-unknown-form.cheer.json",
+      "description": "A brace that is not a name slot.",
+      "valid": false,
+      "errors": [{ "code": "slot", "path": "events[1].text" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/slot-stray-brace.cheer.json",
+      "description": "A closing brace on its own.",
+      "valid": false,
+      "errors": [{ "code": "slot", "path": "events[1].text" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/slot-unknown-member.cheer.json",
+      "description": "A slot naming a member not in the list.",
+      "valid": false,
+      "errors": [{ "code": "unknownMember", "path": "events[1].text", "detail": "z" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/slot-without-member.cheer.json",
+      "description": "{name} in an event without members.",
+      "valid": false,
+      "errors": [{ "code": "slotWithoutMember", "path": "events[2].text" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/mixref-on-call.cheer.json",
+      "description": "mixRef is for MIX only.",
+      "valid": false,
+      "errors": [{ "code": "mixRef", "path": "events[2].mixRef" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/mixref-bad-pattern.cheer.json",
+      "description": "mixRef with capitals and a space.",
+      "valid": false,
+      "errors": [{ "code": "mixRef", "path": "events[1].mixRef" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/steps-count-mismatch.cheer.json",
+      "description": "One step for two words.",
+      "valid": false,
+      "errors": [{ "code": "steps", "path": "events[1].steps" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/steps-not-increasing.cheer.json",
+      "description": "Steps must increase.",
+      "valid": false,
+      "errors": [{ "code": "steps", "path": "events[1].steps" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/steps-past-end.cheer.json",
+      "description": "A step at the event's end.",
+      "valid": false,
+      "errors": [{ "code": "steps", "path": "events[1].steps" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/steps-on-note.cheer.json",
+      "description": "Steps are for MIX and call only.",
+      "valid": false,
+      "errors": [{ "code": "steps", "path": "events[4].steps" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/steps-on-echo.cheer.json",
+      "description": "A sing-along call has no words to step.",
+      "valid": false,
+      "errors": [{ "code": "steps", "path": "events[3].steps" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/steps-too-many-words.cheer.json",
+      "description": "65 words: more than 64.",
+      "valid": false,
+      "errors": [{ "code": "steps", "path": "events[1].steps" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/name-on-note.cheer.json",
+      "description": "A name is for MIX and call only.",
+      "valid": false,
+      "errors": [{ "code": "eventName", "path": "events[4].name" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/name-too-long.cheer.json",
+      "description": "A name over 32 characters.",
+      "valid": false,
+      "errors": [{ "code": "eventName", "path": "events[2].name" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/name-with-newline.cheer.json",
+      "description": "A name on two lines.",
+      "valid": false,
+      "errors": [{ "code": "eventName", "path": "events[2].name" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/name-blank.cheer.json",
+      "description": "A blank name.",
+      "valid": false,
+      "errors": [{ "code": "eventName", "path": "events[1].name" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/authors-empty.cheer.json",
+      "description": "A shared file names an author.",
+      "valid": false,
+      "errors": [{ "code": "authorMissing", "path": "credits.authors" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/author-name-blank.cheer.json",
+      "description": "An author without a name.",
+      "valid": false,
+      "errors": [{ "code": "authorName", "path": "credits.authors[0].name" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/author-url-not-web.cheer.json",
+      "description": "Links must be http or https.",
+      "valid": false,
+      "errors": [{ "code": "url", "path": "credits.authors[0].url" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/link-unparseable.cheer.json",
+      "description": "A link that starts with https:// but does not parse: a space in the host (D-073 ④).",
+      "valid": false,
+      "errors": [{ "code": "url", "path": "credits.sources[0].url" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/link-bad-port.cheer.json",
+      "description": "A link that starts with https:// but does not parse: a port that is not a number (D-073 ④).",
+      "valid": false,
+      "errors": [{ "code": "url", "path": "credits.authors[0].url" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/retrieved-impossible-date.cheer.json",
+      "description": "A date that is not on the calendar.",
+      "valid": false,
+      "errors": [{ "code": "retrievedDate", "path": "credits.sources[0].retrieved" }],
+      "schema": true
+    },
+    {
+      "file": "invalid/retrieved-wrong-format.cheer.json",
+      "description": "A date not written YYYY-MM-DD.",
+      "valid": false,
+      "errors": [{ "code": "retrievedDate", "path": "credits.sources[0].retrieved" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/source-title-too-long.cheer.json",
+      "description": "A source title over 120 characters.",
+      "valid": false,
+      "errors": [{ "code": "sourceTitle", "path": "credits.sources[0].title" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/open-license-without-license.cheer.json",
+      "description": "An open licence must be named.",
+      "valid": false,
+      "errors": [{ "code": "licenseRequired", "path": "credits.license" }],
+      "schema": false
+    },
+    {
+      "file": "invalid/credits-note-too-long.cheer.json",
+      "description": "A note over 200 characters.",
+      "valid": false,
+      "errors": [{ "code": "note", "path": "credits.note" }],
+      "schema": false
+    }
+  ]
+}

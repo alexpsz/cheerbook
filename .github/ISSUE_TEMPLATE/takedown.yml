@@ -1,0 +1,35 @@
+name: 下架请求
+description: 权利人、原作者或投稿者请求下架应援文件（7 天内处理，先下架再核实）
+title: "下架请求："
+labels: ["takedown"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请按[下架规则](https://github.com/alexpsz/cheerbook/blob/main/docs/takedown.md)填写。不需要提供身份证件、住址等个人信息。
+  - type: textarea
+    id: files
+    attributes:
+      label: 要下架的文件
+      description: 文件路径或链接，可以写多个。
+      placeholder: cheers/艺人/歌名/文件名.cheer.json
+    validations:
+      required: true
+  - type: dropdown
+    id: relation
+    attributes:
+      label: 你与这些内容的关系
+      options:
+        - 歌曲、编舞或官方应援法的权利人（或代理人）
+        - 文件所依据的 call 表、视频等材料的原作者
+        - 文件的投稿者（撤回自己的文件）
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: 理由
+      description: 例如它转自你的哪份作品（附链接更好）。
+    validations:
+      required: true

@@ -1,0 +1,24 @@
+{
+  "format": "liveglow-cheer",
+  "version": 1,
+  "song": { "title": "合成曲目", "artist": "合成组合", "duration": 180, "x-sort": 1 },
+  "members": [
+    { "id": "a", "name": "成员甲", "color": "#E4007F", "x-pronunciation": "せいいんこう" },
+    { "id": "b", "name": "成员乙", "color": "#00A0E9" }
+  ],
+  "events": [
+    { "start": 10, "end": 20, "kind": "part", "members": ["a"] },
+    { "start": 20, "end": 24, "kind": "mix", "text": "合成！口号！", "members": ["a"], "x-color": "#FFFFFF" },
+    { "start": 30, "end": 31, "kind": "call", "text": "嘿！" },
+    { "start": 40, "end": 42, "kind": "call", "echo": true },
+    { "start": 50, "end": 51, "kind": "note", "text": "举灯" }
+  ],
+  "credits": {
+    "authors": [{ "name": "合成作者" }],
+    "sources": [{ "kind": "self" }],
+    "permission": "original",
+    "x-review": { "state": "ok", "checks": [1, 2, 3] }
+  },
+  "x-note": "合成的附加说明",
+  "x-deep": { "a": { "b": { "c": { "d": { "e": { "f": { "g": {} } } } } } } }
+}

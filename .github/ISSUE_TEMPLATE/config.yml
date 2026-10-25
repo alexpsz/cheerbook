@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 投稿指南
+    url: https://github.com/alexpsz/cheerbook/blob/main/CONTRIBUTING.md
+    about: 投稿应援文件请直接发起 Pull Request。

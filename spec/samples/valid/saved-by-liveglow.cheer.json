@@ -1,0 +1,125 @@
+{
+  "credits" : {
+    "authors" : [
+      {
+        "name" : "合成作者",
+        "url" : "https://example.com/maker"
+      }
+    ],
+    "license" : "CC-BY-4.0",
+    "note" : "合成样例，仅供测试。",
+    "permission" : "original",
+    "sources" : [
+      {
+        "kind" : "self",
+        "retrieved" : "2026-10-18",
+        "title" : "边听边打轴",
+        "url" : "https://example.com/notes"
+      }
+    ]
+  },
+  "events" : [
+    {
+      "end" : 8,
+      "kind" : "mix",
+      "members" : [
+        "a",
+        "b"
+      ],
+      "mixRef" : "tradition:standard",
+      "readings" : {
+        "kana" : [
+          "ごうせい",
+          "こう",
+          "おつ",
+          "へい"
+        ],
+        "romaji" : [
+          "Gōsei",
+          "Kō",
+          "Otsu",
+          "Hei"
+        ]
+      },
+      "start" : 2,
+      "steps" : [
+        0,
+        1.5,
+        3,
+        4.5
+      ],
+      "text" : "（合成！）甲！乙！丙！"
+    },
+    {
+      "end" : 50,
+      "kind" : "part",
+      "members" : [
+        "a"
+      ],
+      "start" : 40
+    },
+    {
+      "end" : 55,
+      "kind" : "part",
+      "members" : [
+        "b"
+      ],
+      "start" : 45
+    },
+    {
+      "end" : 53,
+      "kind" : "call",
+      "name" : "我的口号",
+      "start" : 52,
+      "text" : "合成！"
+    },
+    {
+      "echo" : true,
+      "end" : 57,
+      "kind" : "call",
+      "start" : 55
+    },
+    {
+      "end" : 59,
+      "kind" : "note",
+      "start" : 58,
+      "text" : "举灯"
+    },
+    {
+      "end" : 64,
+      "kind" : "mix",
+      "name" : "自制 MIX",
+      "start" : 60,
+      "steps" : [
+        0,
+        2
+      ],
+      "tapped" : true,
+      "text" : "嘿！嘿！"
+    }
+  ],
+  "format" : "liveglow-cheer",
+  "generator" : "CheerBook sample",
+  "members" : [
+    {
+      "color" : "#E4007F",
+      "id" : "a",
+      "name" : "成员甲"
+    },
+    {
+      "color" : "#00a0e9",
+      "id" : "b",
+      "name" : "成员乙"
+    }
+  ],
+  "offset" : 0.5,
+  "song" : {
+    "album" : "合成专辑",
+    "appleMusicID" : "1234567890",
+    "artist" : "合成组合 Fixture Unit",
+    "duration" : 200,
+    "isrc" : "XXAB12600001",
+    "title" : "合成曲目 Synthetic Anthem"
+  },
+  "version" : 1
+}

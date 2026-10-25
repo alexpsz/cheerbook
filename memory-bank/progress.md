@@ -27,13 +27,14 @@
 
 **已验证（本地）**：`npm test` 161 项通过（网站 12 项：转义、双向控制字符、无内联脚本、按文件夹分组、符号链接、出错时列出问题等）；在浏览器中用合成数据看过深浅色、375 px 宽度无横向滚动、搜索过滤。独立审查（只读审查代理）未发现高严重度问题，3 个中等（影响线上网站的文件未标为需审查、`cheers/` 之外的符号链接会被跟随、按原文分组导致同一艺人分成两组）与若干低严重度问题均已修正。
 
-**未验证**：Cloudflare Pages 上的构建与访问（项目尚未创建）；Pages 对含中日文、空格、`%#+&` 的路径的处理。
+**已上线（2026-10-25）**：Cloudflare Pages 项目 `cheerbook` 连接本仓库（生产分支 `main`，构建命令 `node tools/build-site.js`，输出 `_site`，不构建预览分支、不发 PR 评论），首次部署（`6cddae6`）构建成功。网址 <https://cheerbook.kozueginko.com>（C-009）与 <https://cheerbook.pages.dev>。**已验证（线上）**：首页、`/mix`、`index.json`、Schema、MIX 库、样式、脚本、图标均 200 且类型正确，未知路径 404；首页响应带 CSP、`nosniff`、Referrer-Policy、Permissions-Policy，`index.json` 带 `Access-Control-Allow-Origin: *`；浏览器中显示正常、控制台无错误；自定义域名经 HTTPS 返回同样的内容与安全头。
+
+**未验证**：Pages 后台的自定义域名证书当时仍在签发（流量已由域名的 Cloudflare 证书正常提供）；Pages 对含中日文、空格、`%#+&` 的路径的处理（要等第一份投稿）。
 
 ## 下一步
 
-1. 在 Cloudflare Pages 连接本仓库并上线网站（维护者在控制台操作），上线后核对页面、下载与响应头。
-2. 第一份投稿到来时，核对 Pull Request 路径与合并后的索引提交。
-3. 第二步：映场接入社区库（在映场仓库中另行规划）。
+1. 第一份投稿到来时，核对 Pull Request 路径与合并后的索引提交。
+2. 第二步：映场接入社区库（在映场仓库中另行规划）。
 
 ## 未决问题
 

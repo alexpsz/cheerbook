@@ -1,5 +1,7 @@
 # CheerBook 应援本
 
+网站：<https://cheerbook.kozueginko.com>
+
 CheerBook 是偶像歌曲应援 / MIX 时间轴的社区库：什么时候喊 MIX、喊 call、哪位成员在唱、什么时候举灯，按秒记在一个 `.cheer.json` 文件里，大家投稿、维护者审核，任何人都可以下载使用。
 
 - **只有时间轴，不含歌词**：文件里只有时间、口号、成员与署名，唱词由播放端从自己的歌词来源显示。
@@ -10,7 +12,7 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 
 ## 使用应援文件
 
-1. 在 [`cheers/`](./cheers/) 里按艺人、歌名找到文件，下载 `.cheer.json`。所有收录文件也列在 [`index.json`](./index.json) 中。
+1. 在[网站](https://cheerbook.kozueginko.com)或 [`cheers/`](./cheers/) 里按艺人、歌名找到文件，下载 `.cheer.json`。所有收录文件也列在 [`index.json`](./index.json) 中。
 2. 在映场中打开“正在播放”侧栏的“应援”标签，点“导入…”选择文件。
 
 文件按录音匹配（ISRC、Apple Music 编号，或歌名、艺人与时长）。导入时映场会显示它是否与正在播放的歌匹配；不匹配的文件也会保存，播放到匹配的录音时使用。同一首歌的现场版、长度不同的版本可能对不上。
@@ -66,6 +68,8 @@ npm run site      # 生成网站到 _site/
 ---
 
 ## English
+
+Website: <https://cheerbook.kozueginko.com>
 
 CheerBook is a community library of cheer timelines for idol songs: when to shout a MIX or a call, which member is singing, when to raise light sticks, kept as `.cheer.json` files. Files carry timing, chants, members and credits only, never lyrics. Contributions arrive as pull requests, are checked automatically and reviewed by a maintainer.
 

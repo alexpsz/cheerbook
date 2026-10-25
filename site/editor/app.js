@@ -6,7 +6,7 @@
 import lib from '/editor/lib.js';
 import { h, clear, formatTime, formatClock, debounce, download, storage, typingTarget } from '/editor/dom.js';
 
-const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P } = lib;
+const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P, lyricsview: V } = lib;
 
 const DRAFT_KEY = 'cheerbook.editor.draft.v1';
 const REPO = 'https://github.com/alexpsz/cheerbook';
@@ -42,6 +42,12 @@ const state = {
   lyricsLookup: null,
 };
 const DRAFT_BACKUP_KEY = 'cheerbook.editor.draft.backup.v1';
+const DISPLAY_KEY = 'cheerbook.editor.display.v1';
+state.display = (() => {
+  const saved = storage.get(DISPLAY_KEY) || {};
+  const display = { original: saved.original !== false, kana: saved.kana === true, romaji: saved.romaji === true };
+  return display.original || display.kana || display.romaji ? display : { original: true, kana: false, romaji: false };
+})();
 
 // ---------------------------------------------------------------------------------------------
 // Time: the audio plays in playback time; a cheer file is in cheer time (playback + offset).
@@ -276,6 +282,7 @@ function togglePlay() {
 
 function seek(to) {
   if (!state.audioURL) return;
+  follow.manualAt = -Infinity;
   audio.currentTime = Math.min(Math.max(0, to), duration());
   frame(true);
 }
@@ -290,16 +297,14 @@ function loop() {
 }
 function startLoop() { if (!rafId && !audio.paused) rafId = requestAnimationFrame(loop); }
 
-let lastRow = -1;
-function frame(force = false) {
+function frame(force = false, { reposition = true } = {}) {
   const pos = position();
   $('clock').textContent = `${formatTime(pos)} / ${formatClock(duration())}`;
   if (!$('seek').matches(':active')) $('seek').value = String(pos);
   renderBand(pos);
   renderBeatDot(pos);
-  const row = currentRowIndex(pos);
-  if (row !== lastRow || force) highlightRow(row, pos);
-  else updateWords(row, pos);
+  syncFocus(pos, { force, reposition });
+  updateFill(pos);
   if (state.held.size) renderHeldTags(pos);
 }
 
@@ -431,6 +436,9 @@ let rows = [];
 function renderTimeline() {
   if (!state.ed) return;
   const list = $('timeline');
+  // A rebuild after an edit keeps the list where it was; only the song moves it.
+  const box = lyricsBox();
+  const keep = box ? box.scrollTop : 0;
   clear(list);
   rows = buildRows();
   $('timeline-empty').hidden = rows.length > 0;
@@ -446,21 +454,21 @@ function renderTimeline() {
       (row.kind === 'line' ? singers.get(row.lineIndex) || [] : []).map(color => h('i', { style: { '--member': color } })));
     const label = row.kind === 'line' ? `${formatTime(row.start)} ${row.line.text}` : gapLabel(row);
     list.append(h('li', { class: `row ${row.kind}`, dataset: { row: String(i) }, tabindex: '-1', 'aria-label': label,
-      onclick: event => { if (!event.target.closest('.tag')) seek(row.start); } },
+      onclick: event => { if (!event.target.closest('.tag')) { follow.manualAt = -Infinity; seek(row.start); } } },
     h('span', { class: 'time' }, formatTime(row.start)), bars, body));
   });
-  lastRow = -1;
-  frame(true);
+  if (box) box.scrollTop = keep;
+  follow.focus = null;
+  frame(true, { reposition: false });
   if (state.fresh !== null) {
     const node = list.querySelector(`[data-event="${state.fresh}"]`);
-    if (node) { node.classList.add('fresh'); node.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }); }
+    if (node) node.classList.add('fresh');
     state.fresh = null;
   }
 }
 
 function lineText(line) {
-  if (!line.words || !line.words.length) return h('div', { class: 'text' }, line.text);
-  return h('div', { class: 'text' }, line.words.map(word => h('span', { class: 'word', dataset: { start: String(word.start) } }, word.text)));
+  return h('div', { class: 'text' }, h('span', { class: 'ink' }, line.text));
 }
 
 function gapLabel(row) {
@@ -500,40 +508,145 @@ function eventTag({ event, index }) {
 
 function renderHeldTags(pos) {
   for (const node of document.querySelectorAll('.tag.recording')) node.remove();
-  const row = $('timeline').querySelector(`[data-row="${currentRowIndex(pos)}"] .tags`) || $('timeline');
+  const row = $('timeline').querySelector(`[data-row="${rowAt(pos)}"] .tags`) || $('timeline');
   for (const { stick, start } of state.held.values()) {
     row.append(h('span', { class: 'tag recording', style: stick.color ? { '--member': stick.color } : undefined },
       h('span', { class: 'kind' }, '正在记录'), stick.label, h('span', { class: 'when' }, `${formatTime(start)}–${formatTime(pos)}`)));
   }
 }
 
-function currentRowIndex(pos) {
+// ---------------------------------------------------------------------------------------------
+// The lyric list, as Liveglow's 歌词 view (lib/lyricsview.js): it moves to the next row 0.3 s
+// early, the focus row sits at 30% of the list, rows below follow as a wave on a no-bounce spring,
+// every lyric is a dim ink and the sung part fills to full ink — word by word with word timing,
+// otherwise a smooth sweep. A manual scroll holds the list for 4 s. Reduce Motion: no movement,
+// the whole line lights at once.
+
+const follow = { focus: null, manualAt: -Infinity, fill: null };
+const SPRING = (() => {
+  const spring = V.springEasing();
+  const supported = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('transition-timing-function', 'linear(0, 1)');
+  return supported ? spring : { easing: 'cubic-bezier(0.22, 1, 0.36, 1)', duration: spring.duration };
+})();
+const lyricsBox = () => document.querySelector('.ed-lyrics');
+const graphemes = text => (typeof Intl !== 'undefined' && Intl.Segmenter
+  ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(part => part.segment)
+  : [...text]);
+
+/** The row a time falls in, without the lead (for recording marks). */
+function rowAt(pos) {
   let found = -1;
   for (let i = 0; i < rows.length; i++) if (rows[i].start <= pos + 0.02) found = i;
   return found;
 }
 
-function highlightRow(index, pos) {
+function syncFocus(pos, { force = false, reposition = true } = {}) {
+  const focus = V.focusIndex(rows.map(row => row.start), pos);
+  if (!force && focus === follow.focus) return;
+  const previous = follow.focus;
+  follow.focus = focus;
   const list = $('timeline');
-  for (const node of list.querySelectorAll('.row.current')) node.classList.remove('current');
-  lastRow = index;
-  if (index < 0) return;
-  const node = list.querySelector(`[data-row="${index}"]`);
-  if (!node) return;
-  node.classList.add('current');
-  if (!audio.paused) {
-    const box = $('timeline').parentElement;
-    const top = node.offsetTop - box.clientHeight / 3;
-    box.scrollTo({ top, behavior: reducedMotion() ? 'auto' : 'smooth' });
-  }
-  updateWords(index, pos);
+  for (const node of list.querySelectorAll('.row.focus')) node.classList.remove('focus');
+  if (previous !== null && previous !== focus) settleFill(previous);
+  const node = focus >= 0 ? list.querySelector(`[data-row="${focus}"]`) : null;
+  if (node) node.classList.add('focus');
+  prepareFill(focus);
+  if (!reposition) return;
+  const now = performance.now() / 1000;
+  if (!V.resumesFollowing(follow.manualAt, now)) return;
+  list.classList.remove('browsing');
+  const box = lyricsBox();
+  if (!box) return;
+  const target = node ? V.anchorScroll(node.offsetTop, box.clientHeight) : 0;
+  // A rebuild or a long jump re-anchors at once; a line change while playing moves on the spring.
+  const animated = !force && !reducedMotion() && !audio.paused && Math.abs(target - box.scrollTop) < box.clientHeight * 2;
+  moveList(box, target, focus, animated);
 }
 
-function updateWords(index, pos) {
-  if (index < 0) return;
-  const node = $('timeline').querySelector(`[data-row="${index}"]`);
+/** Scrolls to `target` and, when animated, lets each nearby row travel from where it was. */
+function moveList(box, target, focus, animated) {
+  const before = box.scrollTop;
+  if (Math.abs(target - before) < 1) return;
+  box.scrollTop = target;
+  const delta = box.scrollTop - before;
+  if (!animated || !delta) return;
+  const top = box.scrollTop - box.clientHeight, bottom = box.scrollTop + box.clientHeight * 2;
+  for (const node of $('timeline').children) {
+    if (node.offsetTop < top || node.offsetTop > bottom) continue;
+    // Interrupt a running move where it is, so a quick second change never jumps.
+    let carry = 0;
+    for (const running of node.getAnimations()) {
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(node).transform);
+      carry = matrix.m42;
+      running.cancel();
+      break;
+    }
+    const index = Number(node.dataset.row);
+    node.animate([{ transform: `translateY(${delta + carry}px)` }, { transform: 'translateY(0)' }],
+      { duration: SPRING.duration, easing: SPRING.easing, delay: V.staggerDelay(index, focus) * 1000, fill: 'backwards' });
+  }
+}
+
+/** Splits the focus lyric into characters and measures them, once per focus change. */
+function prepareFill(index) {
+  follow.fill = null;
+  const row = rows[index];
+  const node = index >= 0 ? $('timeline').querySelector(`[data-row="${index}"] .text`) : null;
+  if (!row || row.kind !== 'line' || !node) return;
+  const chars = graphemes(row.line.text);
+  clear(node);
+  const spans = chars.map(c => h('span', { class: 'ch' }, c));
+  node.append(...spans);
+  const widths = spans.map(span => span.getBoundingClientRect().width);
+  // Wrapped rows count in reading order: a character's position is its offset along the text.
+  const along = []; let sum = 0;
+  for (const width of widths) { along.push(sum); sum += width; }
+  let words = null;
+  if (row.line.words && row.line.words.length) {
+    let at = 0;
+    words = row.line.words.map((word, i) => {
+      const count = graphemes(word.text).length;
+      const next = row.line.words[i + 1];
+      const range = { start: word.start, end: Number.isFinite(word.end) ? word.end : next ? next.start : row.end, from: at, to: at + count };
+      at += count;
+      return range;
+    });
+    if (at !== chars.length) words = null;
+  }
+  const lines = lyricLines();
+  const lineSweep = words ? null : V.sweep(lines, row.lineIndex, duration());
+  const fontSize = parseFloat(getComputedStyle(node).fontSize) || 16;
+  follow.fill = { index, spans, along, widths, words, lineSweep, feather: fontSize * 0.9, last: [] };
+}
+
+/** Sets each character's ink for the current time; only changed values touch the page. */
+function updateFill(pos) {
+  const fill = follow.fill;
+  if (!fill) return;
+  if (reducedMotion()) {
+    const on = pos >= rows[fill.index].start - 0.02 ? 1 : 0;
+    for (let i = 0; i < fill.spans.length; i++) if (fill.last[i] !== on) { fill.last[i] = on; fill.spans[i].style.setProperty('--b', String(on)); }
+    return;
+  }
+  const lit = V.litWidth(fill.widths, pos, { words: fill.words, lineSweep: fill.lineSweep });
+  for (let i = 0; i < fill.spans.length; i++) {
+    const b = Math.round(V.brightness(fill.along[i], lit, fill.feather) * 50) / 50;
+    if (fill.last[i] !== b) { fill.last[i] = b; fill.spans[i].style.setProperty('--b', String(b)); }
+  }
+}
+
+/** The line just sung eases back to the dim ink. */
+function settleFill(index) {
+  const node = $('timeline').querySelector(`[data-row="${index}"] .text`);
   if (!node) return;
-  for (const word of node.querySelectorAll('.word')) word.classList.toggle('sung', Number(word.dataset.start) <= pos);
+  node.classList.add('settling');
+  for (const span of node.querySelectorAll('.ch')) span.style.setProperty('--b', '0');
+}
+
+/** A manual scroll of the list holds it where the listener left it for a while. */
+function noteManualScroll() {
+  follow.manualAt = performance.now() / 1000;
+  $('timeline').classList.add('browsing');
 }
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -548,7 +661,7 @@ function renderBand(pos) {
   if (!state.ed) return;
   const view = E.bandItems(chart(), cheerTime(pos), { lead: BAND_LEAD, library: state.library, lyrics: state.lyrics, increasedContrast: increasedContrast() });
   // Rebuilt only when what it shows changes, not on every frame.
-  const key = JSON.stringify([view, !!state.audioURL]);
+  const key = JSON.stringify([view, !!state.audioURL, state.display]);
   if (key === bandKey) return;
   bandKey = key;
   clear(band);
@@ -556,12 +669,20 @@ function renderBand(pos) {
     band.append(h('span', { class: 'item singing', style: { '--member': view.singers[0].color } },
       h('span', { class: 'kind meta' }, '演唱'), view.singers.map(singer => singer.name).join('・')));
   }
+  const show = state.display;
   for (const item of view.current || []) {
     const color = item.singers && item.singers[0] ? item.singers[0].color : null;
     const words = item.words && item.words.length ? item.words : [item.text];
+    const kana = show.kana && item.kana && item.kana.length === words.length ? item.kana : null;
+    const romaji = show.romaji && item.romaji && item.romaji.length === words.length ? item.romaji : null;
+    // A cheer without readings still shows its words when only readings were chosen.
+    const original = show.original || (!kana && !romaji);
     band.append(h('span', { class: 'item', style: color ? { '--member': color } : undefined },
       h('span', { class: 'kind meta' }, item.label),
-      words.map((word, i) => h('span', { class: 'w' + (item.activeWord !== null && i <= item.activeWord ? ' on' : ''), lang: 'ja' }, word))));
+      words.map((word, i) => h('span', { class: 'w' + (item.activeWord !== null && i <= item.activeWord ? ' on' : '') },
+        kana ? h('span', { class: 'kana', lang: 'ja' }, kana[i]) : null,
+        original ? h('span', { class: 'orig', lang: 'ja' }, word) : null,
+        romaji ? h('span', { class: 'romaji', lang: 'ja-Latn' }, romaji[i]) : null))));
   }
   if (view.upcoming) {
     band.append(h('span', { class: 'next' }, '下一条：', view.upcoming.title || view.upcoming.text || ''),
@@ -1132,6 +1253,27 @@ function wire() {
     changed();
   });
   $('calibrate').addEventListener('click', () => { if (!state.calibrating) calibrate(); });
+  for (const [id, key] of [['show-original', 'original'], ['show-kana', 'kana'], ['show-romaji', 'romaji']]) {
+    $(id).checked = state.display[key];
+    $(id).addEventListener('change', e => {
+      const next = { ...state.display, [key]: e.target.checked };
+      if (!next.original && !next.kana && !next.romaji) { e.target.checked = true; status('至少要显示一种：原文、平假名或罗马音。', true); return; }
+      state.display = next;
+      storage.set(DISPLAY_KEY, next);
+      frame(true);
+    });
+  }
+  // A manual scroll of the lyric list (wheel, touch, keys, the scroll bar) holds it for a while.
+  const box = lyricsBox();
+  box.addEventListener('wheel', noteManualScroll, { passive: true });
+  box.addEventListener('touchstart', noteManualScroll, { passive: true });
+  box.addEventListener('pointerdown', event => { if (event.target === box) noteManualScroll(); });
+  box.addEventListener('keydown', event => { if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'].includes(event.key)) noteManualScroll(); });
+  // The room above and below the lines (CSS) follows the list's height, set at once and on resize.
+  const measureLyrics = () => box.style.setProperty('--lyrics-h', box.clientHeight + 'px');
+  measureLyrics();
+  new ResizeObserver(measureLyrics).observe(box);
+  window.addEventListener('resize', measureLyrics);
   $('tap-tempo').addEventListener('click', () => { $('more-dialog').close(); tapTempo(); });
   $('sort-events').addEventListener('click', () => { state.ed.sortEvents(); state.selected = null; changed(); });
   $('new-chart').addEventListener('click', () => {

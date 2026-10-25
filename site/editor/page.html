@@ -115,6 +115,12 @@
     <p class="meta">按键总会比听到的晚一点，记录时自动往前移这么多。可以用下面的“校准”测一测。</p>
     <div class="dialog-row"><button type="button" id="calibrate">校准反应时间…</button><span id="calibrate-result" class="meta"></span></div>
     <label class="ed-field"><span>整体偏移（秒，−10–10，正值让应援提前）</span><input id="offset" type="number" min="-10" max="10" step="0.05"></label>
+    <fieldset class="ed-choice">
+      <legend>MIX 显示（至少一种）</legend>
+      <label><input type="checkbox" id="show-original"> 原文</label>
+      <label><input type="checkbox" id="show-kana"> 平假名注音</label>
+      <label><input type="checkbox" id="show-romaji"> 罗马音</label>
+    </fieldset>
     <div class="dialog-row">
       <button type="button" id="tap-tempo">跟拍 8 下估速度</button>
       <button type="button" id="sort-events">按时间排序</button>

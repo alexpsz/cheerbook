@@ -85,6 +85,7 @@
       <button type="button" id="grid-double" hidden title="速度翻倍">×2</button>
       <button type="button" id="grid-half" hidden title="速度减半">÷2</button>
       <button type="button" id="grid-shift" hidden title="小节线往后移一拍">移一拍</button>
+      <button type="button" id="grid-set" hidden title="直接填写节拍速度和小节线的位置">BPM 与起拍偏移…</button>
     </span>
   </div>
   <div id="sticks" class="sticks" role="toolbar" aria-label="打点：按住记录，松开结束"></div>
@@ -115,7 +116,8 @@
     <label class="ed-field"><span>反应补偿（秒，0–0.5）</span><input id="compensation" type="number" min="0" max="0.5" step="0.01"></label>
     <p class="meta">按键总会比听到的晚一点，记录时自动往前移这么多。可以用下面的“校准”测一测。</p>
     <div class="dialog-row"><button type="button" id="calibrate">校准反应时间…</button><span id="calibrate-result" class="meta"></span></div>
-    <label class="ed-field"><span>整体偏移（秒，−10–10，正值让应援提前）</span><input id="offset" type="number" min="-10" max="10" step="0.05"></label>
+    <label class="ed-field"><span>整体偏移（秒，−10–10，正值让应援提前）</span><input id="offset" type="number" min="-10" max="10" step="0.05" aria-describedby="offset-note"></label>
+    <p class="meta" id="offset-note">整体偏移会移动整份应援。要让拍子对上音频（第一拍不在 0:00），请用下面的“BPM 与起拍偏移”。</p>
     <fieldset class="ed-choice">
       <legend>MIX 显示（至少一种）</legend>
       <label><input type="checkbox" id="show-original"> 原文</label>
@@ -124,6 +126,7 @@
     </fieldset>
     <div class="dialog-row">
       <button type="button" id="tap-tempo">跟拍 8 下估速度</button>
+      <button type="button" id="grid-open">BPM 与起拍偏移…</button>
       <button type="button" id="sort-events">按时间排序</button>
     </div>
     <details>
@@ -136,6 +139,24 @@
       <button type="button" id="new-chart" class="danger">新建空白应援…</button>
     </div>
     <div class="dialog-row end"><button value="close" class="primary">完成</button></div>
+  </form>
+</dialog>
+
+<dialog id="grid-dialog" aria-labelledby="grid-title" aria-describedby="grid-intro">
+  <form method="dialog" class="dialog-body">
+    <h2 id="grid-title">BPM 与起拍偏移</h2>
+    <p class="meta" id="grid-intro">自动分析或跟拍不准时，直接填写节拍速度和第一小节的位置。拍子按 4/4 拍，只用来对齐 MIX、逐词对齐和推荐，不会写进应援文件。</p>
+    <label class="ed-field"><span>节拍速度（BPM，40–320）</span><input id="grid-bpm" type="number" min="40" max="320" step="any" inputmode="decimal" required></label>
+    <label class="ed-field"><span>起拍偏移（秒）：第一小节第一拍在音频里的位置</span><input id="grid-anchor" type="number" min="0" step="0.001" inputmode="decimal" required aria-describedby="grid-anchor-note"></label>
+    <p class="meta" id="grid-anchor-note">音频开头有静音或没有固定节拍的前奏、第一拍不在 0:00 时填这里，例如 0.469。可以先把播放停在第一拍上，再点“设为当前播放位置”。</p>
+    <div class="dialog-row">
+      <button type="button" id="grid-here">设为当前播放位置</button>
+      <button type="button" id="grid-auto" hidden>恢复自动分析的结果</button>
+    </div>
+    <div class="dialog-row end">
+      <button type="button" data-close>取消</button>
+      <button value="apply" class="primary">应用</button>
+    </div>
   </form>
 </dialog>
 

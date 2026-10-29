@@ -29,6 +29,13 @@ const state = {
   lyricsText: '',
   grid: null,
   gridNote: '',
+  // The last analysis of the loaded audio, to go back to after tapping or typing a grid.
+  autoGrid: null,
+  autoNote: '',
+  // A grid typed in by hand, `{ bpm, anchor, audioName, duration }`: kept with the draft and used
+  // again when an audio file of that name and length is chosen, since a grid is in that recording's time.
+  manualGrid: null,
+  gridDialogShown: null,
   member: null,
   selected: null,
   suggestions: null,
@@ -98,7 +105,7 @@ const saveDraft = debounce(() => {
   if (!state.ed) return;
   const ok = storage.set(DRAFT_KEY, {
     chart: chart(), compensation: state.ed.compensation, lyricsText: state.lyricsText, dirty: state.dirty,
-    audioName: state.audioName, member: state.member, sourcePath: state.sourcePath, savedAt: new Date().toISOString(),
+    audioName: state.audioName, member: state.member, sourcePath: state.sourcePath, grid: state.manualGrid, savedAt: new Date().toISOString(),
   });
   if (!ok && !state.storageWarned) {
     state.storageWarned = true;
@@ -187,6 +194,7 @@ async function loadAudio(file) {
   if (mismatch) status(mismatch, true);
   for (const id of ['play', 'seek']) $(id).disabled = false;
   $('seek').max = String(audio.duration);
+  $('grid-set').hidden = false;
   renderAll();
   analyseBeat(file);
 }
@@ -200,7 +208,11 @@ function guessSong(name) {
 
 async function analyseBeat(file) {
   const run = ++state.analysisRun;
-  setGrid(state.grid && state.grid.source === 'taps' ? state.grid : null, '节拍：正在分析…');
+  state.autoGrid = null;
+  // Called once the metadata is in, so the length is known.
+  const typed = typedForThisAudio() ? S.gridFromBPM(state.manualGrid.bpm, state.manualGrid.anchor, audio.duration) : null;
+  const kept = typed || (state.grid && state.grid.source === 'taps' ? state.grid : null);
+  setGrid(kept, kept ? handNote(kept, '（正在分析…）') : '节拍：正在分析…');
   if (state.worker) { state.worker.terminate(); state.worker = null; }
   try {
     const bytes = await file.arrayBuffer();
@@ -224,16 +236,27 @@ async function analyseBeat(file) {
     if (run !== state.analysisRun) return;
     if (!reply.ok) throw new Error(reply.message);
     const found = reply.result;
-    if (!found) { setGrid(state.grid, '节拍：没找到稳定的节拍，可以在“更多”里跟拍 8 下。'); status('已载入音频。没找到稳定的节拍：MIX 会插到当前位置，推荐只标出空位。', true); return; }
-    if (state.grid && state.grid.source === 'taps') { setGrid(state.grid, `节拍：已按跟拍（自动分析为 ${Math.round(found.bpm)} BPM）`); return; }
-    const level = found.confidence >= 0.66 ? '高' : found.confidence >= 0.4 ? '中' : '低';
+    if (found) {
+      const level = found.confidence >= 0.66 ? '高' : found.confidence >= 0.4 ? '中' : '低';
+      state.autoGrid = S.makeGrid(found.beat, found.anchor, 'beatMap');
+      state.autoNote = `节拍：${Math.round(found.bpm)} BPM · 自动分析（把握${level}）`;
+    }
+    // A grid tapped or typed in by hand stays over the analysis.
+    const hand = handMade(state.grid);
+    if (hand) {
+      setGrid(hand, handNote(hand, found ? `（自动分析为 ${Math.round(found.bpm)} BPM）` : ''));
+      status(`已载入音频，按${hand.source === 'manual' ? '手动设置' : '跟拍'}的 ${bpmText(hand)} BPM 对齐。`);
+      return;
+    }
+    if (!found) { setGrid(null, '节拍：没找到稳定的节拍，可以跟拍 8 下，或点“BPM 与起拍偏移…”直接填写。'); status('已载入音频。没找到稳定的节拍：MIX 会插到当前位置，推荐只标出空位。', true); return; }
     const doubtful = found.confidence < 0.4 || (found.downbeatConfidence ?? 1) < 0.5;
-    setGrid(S.makeGrid(found.beat, found.anchor, 'beatMap'), `节拍：${Math.round(found.bpm)} BPM · 自动分析（把握${level}）`);
+    setGrid(state.autoGrid, state.autoNote);
     status(`已载入音频，节拍 ${Math.round(found.bpm)} BPM。${lyricLines().length ? '可以边听边点了。' : '可以加载歌词，然后边听边点。'}`);
-    if (doubtful) status('自动分析的节拍把握不大：播放时看节拍点是否跟上鼓点，不对可以用 ×2、÷2、移一拍调整，或跟拍 8 下。', true);
+    if (doubtful) status('自动分析的节拍把握不大：播放时看节拍点是否跟上鼓点，不对可以用 ×2、÷2、移一拍调整，跟拍 8 下，或点“BPM 与起拍偏移…”直接填写。', true);
   } catch (error) {
     if (run !== state.analysisRun) return;
-    setGrid(state.grid, '节拍：分析失败（' + error.message + '），可以在“更多”里跟拍 8 下。');
+    const hand = handMade(state.grid);
+    setGrid(hand, hand ? handNote(hand, `（自动分析失败：${error.message}）`) : '节拍：分析失败（' + error.message + '），可以跟拍 8 下，或点“BPM 与起拍偏移…”直接填写。');
   }
 }
 
@@ -252,6 +275,13 @@ async function decodeForAnalysis(bytes) {
   try { return await context.decodeAudioData(bytes.slice(0)); } finally { context.close(); }
 }
 
+/** A grid's tempo as shown: whole BPM, or up to two decimals for one typed in by hand. */
+const bpmText = grid => String(grid.source === 'manual' ? Math.round(grid.bpm * 100) / 100 : Math.round(grid.bpm));
+/** The grid when it was tapped or typed in rather than analysed, else null. */
+const handMade = grid => (grid && grid.source !== 'beatMap' ? grid : null);
+/** The grid status for a tapped or typed-in grid, with an optional note on the analysis. */
+const handNote = (grid, extra = '') => `节拍：${bpmText(grid)} BPM · ${grid.source === 'manual' ? '手动设置' : '跟拍'}${extra}`;
+
 function setGrid(grid, note) {
   state.grid = grid;
   state.gridNote = note;
@@ -260,6 +290,8 @@ function setGrid(grid, note) {
   $('mix-hint').textContent = grid ? '点一下插入到当前位置，对齐到下一拍。' : '点一下插入到当前位置。';
   state.suggestions = null;
   $('suggest').textContent = '✦ 推荐';
+  // The analysis can finish while the beat dialog is open.
+  if ($('grid-dialog').open) syncGridRestore();
   renderTimeline();
 }
 
@@ -271,11 +303,69 @@ function adjustGrid(kind) {
   const grid = state.grid;
   if (!grid) return;
   const beat = kind === 'double' ? grid.beat / 2 : kind === 'half' ? grid.beat * 2 : grid.beat;
-  if (60 / beat < 40 || 60 / beat > 320) return;
+  if (60 / beat < S.GRID_BPM.min || 60 / beat > S.GRID_BPM.max) return;
   const anchor = kind === 'shift' ? grid.anchor + grid.beat : grid.anchor;
   const next = S.makeGrid(beat, anchor, grid.source);
-  setGrid(next, `节拍：${Math.round(next.bpm)} BPM · 已手动调整`);
-  status(kind === 'shift' ? '小节线已移后一拍。' : `已改为 ${Math.round(next.bpm)} BPM。`, true);
+  if (next.source === 'manual') rememberManualGrid(next);
+  setGrid(next, `节拍：${bpmText(next)} BPM · 已手动调整`);
+  status(kind === 'shift' ? '小节线已移后一拍。' : `已改为 ${bpmText(next)} BPM。`, true);
+}
+
+// Tempo and first bar line typed in by hand, for when the analysis and the taps both miss: a
+// recording whose first beat is not at 0:00, or a tempo the estimator halves or doubles.
+
+/** Whether the remembered typed grid is for the loaded audio: same file name and length. */
+const typedForThisAudio = () => !!state.manualGrid && state.manualGrid.audioName === state.audioName && Math.abs(state.manualGrid.duration - audio.duration) <= 0.5;
+const audioKnown = () => Number.isFinite(audio.duration) && audio.duration > 0;
+/** One of the grid's bar lines inside the recording: its own, or else the first after 0:00 (after many "移一拍"). */
+const barLineInside = grid => (grid.anchor >= 0 && grid.anchor <= duration() ? grid.anchor : Math.max(0, S.barLine(grid, 0)));
+
+/** Remembers (or with null forgets) the typed grid for the loaded audio, with the draft. */
+function rememberManualGrid(grid) {
+  state.manualGrid = grid ? { bpm: grid.bpm, anchor: barLineInside(grid), audioName: state.audioName, duration: audio.duration } : null;
+  saveDraft();
+}
+
+function syncGridRestore() {
+  $('grid-auto').hidden = !state.autoGrid || state.grid === state.autoGrid;
+}
+
+function openGridDialog() {
+  if (!state.audioURL || !audioKnown()) { status('先选择能播放的音频，再设置 BPM 与起拍偏移。', true); return; }
+  const grid = state.grid;
+  $('grid-bpm').value = grid ? String(Math.round(grid.bpm * 100) / 100) : '';
+  $('grid-anchor').value = String(Math.round((grid ? barLineInside(grid) : 0) * 1000) / 1000);
+  $('grid-anchor').max = String(Math.floor(duration() * 1000) / 1000);
+  // What the fields opened with: applying them unchanged leaves the grid (and its source) alone.
+  state.gridDialogShown = { grid, bpm: $('grid-bpm').value, anchor: $('grid-anchor').value };
+  syncGridRestore();
+  $('grid-dialog').returnValue = '';
+  $('grid-dialog').showModal();
+}
+
+/** The current position for the first bar line; a click while playing lands late, as taps do. */
+function gridAnchorHere() {
+  const at = position() - (audio.paused ? 0 : state.ed.compensation);
+  $('grid-anchor').value = String(Math.round(Math.max(0, at) * 1000) / 1000);
+}
+
+function applyGridDialog() {
+  const shown = state.gridDialogShown;
+  if (shown && shown.grid && shown.grid === state.grid && $('grid-bpm').value === shown.bpm && $('grid-anchor').value === shown.anchor) return;
+  if (!audioKnown()) return;
+  const grid = S.gridFromBPM(Number($('grid-bpm').value), Number($('grid-anchor').value), duration());
+  if (!grid) { status(`没能设置节拍：节拍速度要在 ${S.GRID_BPM.min}–${S.GRID_BPM.max} BPM 之间，起拍偏移在 0 到歌曲长度之间。`, true); return; }
+  rememberManualGrid(grid);
+  setGrid(grid, handNote(grid));
+  status(`节拍已设为 ${bpmText(grid)} BPM，${grid.anchor.toFixed(3)} 秒处是一个小节的第一拍。播放时看节拍点是否跟上鼓点。`, true);
+}
+
+function restoreAutoGrid() {
+  if (!state.autoGrid) return;
+  if (typedForThisAudio()) rememberManualGrid(null);
+  setGrid(state.autoGrid, state.autoNote);
+  $('grid-dialog').close('cancel');
+  status('已恢复自动分析的节拍。', true);
 }
 
 function togglePlay() {
@@ -1144,6 +1234,8 @@ function tapTempo() {
   const grid = S.gridFromTaps(state.taps);
   state.taps = null;
   if (!grid) { status('跟拍不太稳，没能估出速度，再试一次。', true); return; }
+  // The taps replace a grid typed in for this recording.
+  if (typedForThisAudio()) rememberManualGrid(null);
   setGrid(grid, `节拍：${Math.round(grid.bpm)} BPM · 跟拍`);
   status(`已按跟拍对齐：${Math.round(grid.bpm)} BPM。`, true);
 }
@@ -1266,6 +1358,10 @@ function wire() {
   $('grid-double').addEventListener('click', () => adjustGrid('double'));
   $('grid-half').addEventListener('click', () => adjustGrid('half'));
   $('grid-shift').addEventListener('click', () => adjustGrid('shift'));
+  $('grid-set').addEventListener('click', openGridDialog);
+  $('grid-here').addEventListener('click', gridAnchorHere);
+  $('grid-auto').addEventListener('click', restoreAutoGrid);
+  $('grid-dialog').addEventListener('close', () => { if ($('grid-dialog').returnValue === 'apply') applyGridDialog(); });
   $('save-local').addEventListener('click', saveLocal);
   $('toggle-mode').addEventListener('click', () => {
     const watching = root.dataset.mode !== 'watch';
@@ -1332,6 +1428,7 @@ function wire() {
   new ResizeObserver(measureLyrics).observe(box);
   window.addEventListener('resize', measureLyrics);
   $('tap-tempo').addEventListener('click', () => { $('more-dialog').close(); tapTempo(); });
+  $('grid-open').addEventListener('click', () => { $('more-dialog').close(); openGridDialog(); });
   $('sort-events').addEventListener('click', () => { state.ed.sortEvents(); state.selected = null; changed(); });
   $('new-chart').addEventListener('click', () => {
     if (hasWorkToLose() && !confirm('新建空白应援会替换当前草稿（还没有保存到本机）。上一份草稿会留一份备份。继续？')) return;
@@ -1394,6 +1491,9 @@ async function start() {
   state.dirty = !!(draft && draft.dirty);
   state.member = draft && typeof draft.member === 'string' && chart().members.some(member => member.id === draft.member) ? draft.member : null;
   state.sourcePath = draft && typeof draft.sourcePath === 'string' && draft.sourcePath.startsWith(P.LIBRARY_DIR + '/') ? draft.sourcePath : null;
+  const typed = draft && draft.grid;
+  state.manualGrid = typed && typeof typed === 'object' && typeof typed.audioName === 'string' && Number.isFinite(typed.duration) && typed.duration > 0 &&
+    S.gridFromBPM(typed.bpm, typed.anchor, typed.duration) ? { bpm: typed.bpm, anchor: typed.anchor, audioName: typed.audioName, duration: typed.duration } : null;
   if (draft && typeof draft.lyricsText === 'string' && draft.lyricsText) { state.lyricsText = draft.lyricsText; applyLyrics(draft.lyricsText); state.dirty = !!draft.dirty; }
   if (draft && chart().events.length) status(`已恢复上次的草稿（${chart().events.length} 条应援）。重新选择音频“${draft.audioName || ''}”即可继续。`);
   else status('选择本地音频开始。音频只在你的浏览器里播放，不会上传。');

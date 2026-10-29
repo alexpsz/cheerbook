@@ -61,6 +61,29 @@ test('taps estimate the tempo and the bar line', () => {
   assert.equal(suggest.gridFromTaps(Array.from({ length: 8 }, (_, i) => i * 2)), null);   // 30 BPM is not a beat.
 });
 
+test('a grid typed in by hand: tempo and the first bar line after a late start', () => {
+  // 150 BPM (a beat is 0.4 s, a bar 1.6 s) whose first bar starts 0.469 s into the recording.
+  const found = suggest.gridFromBPM(150, 0.469, 104);
+  assert.ok(found);
+  assert.equal(found.source, 'manual');
+  assert.ok(Math.abs(found.bpm - 150) < 1e-9 && Math.abs(found.beat - 0.4) < 1e-12);
+  assert.equal(found.anchor, 0.469);
+  assert.ok(Math.abs(suggest.barLine(found, 0) - 0.469) < 1e-9);
+  assert.ok(Math.abs(suggest.barLine(found, 1) - 2.069) < 1e-9);
+  assert.ok(Math.abs(suggest.nextBeat(found, 0.5) - 0.869) < 1e-9);
+  // Decimal tempos and a bar line at either end of the recording are fine.
+  assert.ok(Math.abs(suggest.gridFromBPM(163.5, 0).bpm - 163.5) < 1e-9);
+  assert.ok(suggest.gridFromBPM(suggest.GRID_BPM.min, 104, 104));
+  assert.ok(suggest.gridFromBPM(suggest.GRID_BPM.max, 0, 104));
+  for (const [bpm, anchor] of [[39.9, 0], [320.1, 0], [NaN, 0], [Infinity, 0], ['120', 0], [120, -0.001], [120, NaN], [120, 104.001]]) {
+    assert.equal(suggest.gridFromBPM(bpm, anchor, 104), null, `${bpm} BPM at ${anchor}`);
+  }
+  // A typed-in grid is not the recording's own beat map, so suggestions are no more than medium.
+  const manual = suggest.gridFromBPM(120, 0, 104);
+  const suggested = suggest.suggestions(song, 104, manual, chart(), library);
+  assert.ok(suggested.length > 0 && suggested.every(item => item.confidence === 'medium'));
+});
+
 test('gaps find the intro, the run-ups to the chorus, the interlude and the outro', () => {
   const found = suggest.gaps(song, 104, grid);
   assert.deepEqual(found.map(gap => gap.kind), ['intro', 'chorusLead', 'interlude', 'chorusLead', 'outro']);

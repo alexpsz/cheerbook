@@ -115,6 +115,7 @@ const saveDraft = debounce(() => {
 
 /** After any change to the chart: re-check, re-render and remember the draft. */
 function changed({ save = true, panel = true } = {}) {
+  if (draftSnapshot && draftSnapshot !== chart()) resetDraftLink();
   if (save) state.dirty = true;
   check();
   renderAll({ panel });
@@ -1144,6 +1145,49 @@ function saveLocal() {
   status('已保存到本机下载文件夹。这份文件可以在映场里“导入…”。', true);
 }
 
+// CheerEditor replaces its immutable chart on edits. A completed copy is usable only while
+// that snapshot and its dialog are still current, including when an earlier write finishes late.
+let draftSnapshot = null;
+let draftAttempt = 0;
+let draftCopyPending = false;
+function resetDraftLink() {
+  draftAttempt++;
+  draftSnapshot = null;
+  const link = $('draft-launch');
+  link.hidden = true;
+  link.removeAttribute('href');
+  $('draft-result').textContent = '';
+  $('draft-copy').disabled = draftCopyPending;
+}
+
+async function openDraftInLiveglow() {
+  if (draftCopyPending) return;
+  resetDraftLink();
+  const attempt = draftAttempt, snapshot = chart();
+  draftSnapshot = snapshot;
+  draftCopyPending = true;
+  $('draft-copy').disabled = true;
+  const current = () => attempt === draftAttempt && snapshot === chart() && $('draft-dialog').open;
+  try {
+    const result = await E.copyLocalDraft(snapshot, text => navigator.clipboard.writeText(text));
+    if (!current()) return;
+    if (result.errors) {
+      $('draft-result').textContent = '请先修正应援文件：' + result.errors.slice(0, 2).map(M.issueMessage).join(' ');
+      return;
+    }
+    const link = $('draft-launch');
+    link.href = result.url;
+    link.hidden = false;
+    $('draft-result').textContent = '已复制。请使用支持草稿交接的映场客户端。如果没有自动打开，请点“打开映场”。';
+    link.click();
+  } catch {
+    if (current()) $('draft-result').textContent = '浏览器未能完成剪贴板交接，草稿仍保存在此编辑器。可以允许本站写入剪贴板后重试，或关闭后点“保存到本机”备份。';
+  } finally {
+    draftCopyPending = false;
+    $('draft-copy').disabled = false;
+  }
+}
+
 function shareChoice() {
   const origin = document.querySelector('input[name="origin"]:checked').value;
   const consent = document.querySelector('input[name="consent"]:checked').value;
@@ -1437,6 +1481,12 @@ function wire() {
     useChart(newChart({ title: chart().song.title, artist: chart().song.artist, duration: duration() }));
     $('more-dialog').close();
     status('已新建空白应援。', true);
+  });
+  $('open-draft').addEventListener('click', () => { resetDraftLink(); $('draft-dialog').showModal(); });
+  $('draft-dialog').addEventListener('close', resetDraftLink);
+  $('draft-copy').addEventListener('click', openDraftInLiveglow);
+  $('draft-launch').addEventListener('click', event => {
+    if (!draftSnapshot || draftSnapshot !== chart()) { event.preventDefault(); resetDraftLink(); }
   });
   // Share.
   $('open-share').addEventListener('click', () => { $('share-confirm').checked = false; renderShare(); $('share-dialog').showModal(); });

@@ -18,6 +18,7 @@
     <button type="button" id="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">重做</button>
     <button type="button" id="open-more">更多…</button>
     <button type="button" id="save-local">保存到本机</button>
+    <button type="button" id="open-draft">在映场中打开…</button>
     <button type="button" id="open-share" class="primary">分享 / 投稿…</button>
     <button type="button" id="toggle-mode" aria-pressed="false">观看模式</button>
   </div>
@@ -158,6 +159,19 @@
       <button value="apply" class="primary">应用</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="draft-dialog" aria-labelledby="draft-title">
+  <div class="dialog-body">
+    <h2 id="draft-title">在映场中打开草稿</h2>
+    <p>这会用当前应援文件替换系统剪贴板的内容。开启了 Apple 通用剪贴板时，它也可能同步到你的其他设备。音频和导入的歌词留在浏览器里。</p>
+    <p id="draft-result" role="status" aria-live="polite"></p>
+    <div class="dialog-row end">
+      <button type="button" data-close>关闭</button>
+      <button type="button" id="draft-copy" class="primary">复制草稿并打开映场</button>
+      <a id="draft-launch" hidden>打开映场</a>
+    </div>
+  </div>
 </dialog>
 
 <dialog id="share-dialog" aria-labelledby="share-title">

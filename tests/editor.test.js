@@ -662,3 +662,29 @@ test('lib/editor.js and lib/suggest.js load in a bundle without Node APIs', () =
   assert.equal(editor.insertMix(load('suggest').entryById(JSON.parse(JSON.stringify(library)), 'standard'), 100, null), 7);
   assert.equal(bundled.eventTitle(editor.chart.events[7], editor.chart, library), 'スタンダードMIX');
 });
+
+test('local handoff writes the exact anonymous chart and hashes only the UTF-8 payload', async () => {
+  const { createHash } = require('node:crypto');
+  const { copyLocalDraft, newChart, serialize } = require('../lib/editor');
+  const draft = newChart({ title: '合成曲', artist: ' Fixture & Unit ', duration: 20 }, '');
+  draft.events = [{ kind: 'note', text: '举灯', start: 1, end: 3 }];
+  draft.audioName = 'private-audio';
+  draft.lyricsText = 'private-lyrics';
+  let written;
+  const pending = copyLocalDraft(draft, text => { written = text; });
+  assert.equal(written, serialize(draft), 'clipboard write starts in the initiating click turn');
+  assert.ok(!written.includes('private-'));
+  const digest = createHash('sha256').update(written, 'utf8').digest('hex');
+  assert.deepEqual(await pending, { url: 'liveglow://cheer/draft?sha256=' + digest });
+});
+
+test('malformed or oversized local handoffs never write, and clipboard denial yields no URL', async () => {
+  const { copyLocalDraft, newChart } = require('../lib/editor');
+  const draft = newChart({ title: 'Sample', artist: 'Fixture', duration: 20 }, '');
+  const noWrite = () => assert.fail('invalid handoff should never touch clipboard');
+  assert.ok((await copyLocalDraft({ ...draft, song: { ...draft.song, duration: 0 } }, noWrite)).errors.length);
+  const tooLarge = { ...draft, events: Array.from({ length: 1800 }, () =>
+    ({ kind: 'mix', start: 1, end: 3, text: '字'.repeat(120) })) };
+  assert.equal((await copyLocalDraft(tooLarge, noWrite)).errors[0].code, 'tooLarge');
+  await assert.rejects(copyLocalDraft(draft, async () => { throw new Error('denied'); }), /denied/);
+});

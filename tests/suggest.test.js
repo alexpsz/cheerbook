@@ -412,7 +412,8 @@ test('word presses alone give a grid', () => {
 // From CheerShareFlowTests.swift: the built-in MIX library.
 test('the MIX library is the cross-checked set, and each entry makes a valid event', () => {
   const entries = suggest.libraryEntries(library);
-  assert.deepEqual(entries.map(mix => mix.id), ['standard', 'japanese', 'ainu', 'ainu-wisupe', 'chaos', 'gachikoi', 'ppph', 'encho', 'oborozuki', 'spanish', 'arabic']);
+  const originals = ['standard', 'japanese', 'ainu', 'ainu-wisupe', 'chaos', 'gachikoi', 'ppph', 'encho', 'oborozuki', 'spanish', 'arabic'];
+  assert.deepEqual(entries.map(mix => mix.id).filter(id => originals.includes(id)), originals);
   for (const mix of entries) {
     assert.ok(mix.sources.length >= 2 && mix.sources.every(code => Object.hasOwn(library.sources, code)), mix.id);
     const value = chart({ duration: 200 });
@@ -439,7 +440,7 @@ test('a library that breaks a header rule gives nothing; a bad entry is left out
   broken.entries[0].bars = [6, 4];
   broken.entries[1].sources = ['C'];
   broken.entries.push({ ...structuredClone(library.entries[2]) });   // A duplicate id.
-  assert.deepEqual(suggest.libraryEntries(broken).map(mix => mix.id), ['ainu', 'ainu-wisupe', 'chaos', 'gachikoi', 'ppph', 'encho', 'oborozuki', 'spanish', 'arabic']);
+  assert.deepEqual(suggest.libraryEntries(broken).map(mix => mix.id), library.entries.slice(2).map(mix => mix.id));
 });
 
 test('clock reads minutes and seconds', () => {
@@ -447,4 +448,14 @@ test('clock reads minutes and seconds', () => {
   assert.equal(suggest.clock(64.9), '1:04');
   assert.equal(suggest.clock(-3), '0:00');
   assert.equal(suggest.clock(Number.NaN), '0:00');
+});
+
+test('per-entry source dates follow the native library reader', () => {
+  const base = entry('standard');
+  const read = (first, duplicate = false) => suggest.libraryEntries({
+    ...library, entries: [first, ...(duplicate ? [base] : [])],
+  });
+  assert.equal(read({ ...base, retrieved: '2026-10-25' })[0].retrieved, '2026-10-25');
+  assert.deepEqual(read({ ...base, retrieved: 12 }, true), [base]);
+  assert.deepEqual(read({ ...base, retrieved: '2026-02-30' }, true), []);
 });

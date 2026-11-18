@@ -52,6 +52,10 @@ test('contributors’ text is escaped and their files are published under their 
   assert.doesNotMatch(home, /<script>alert|<img src=x/);
   assert.match(home, /&lt;script&gt;alert\(1\)&lt;\/script&gt;&quot;&#39;&amp;/);
   assert.match(home, new RegExp(`href="${href(file).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" download`));
+  const nativeLink = new URL(home.match(/href="(liveglow:[^"]+)"/)[1]);
+  assert.equal(nativeLink.host, 'cheer');
+  assert.equal(nativeLink.pathname, '/import');
+  assert.deepEqual([...nativeLink.searchParams], [['path', file]]);
   assert.ok(fs.existsSync(path.join(out, file)));
 });
 

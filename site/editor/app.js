@@ -767,16 +767,15 @@ function renderBand(pos) {
   for (const item of view.current || []) {
     const color = item.singers && item.singers[0] ? item.singers[0].color : null;
     const words = item.words && item.words.length ? item.words : [item.text];
-    const kana = show.kana && item.kana && item.kana.length === words.length ? item.kana : null;
-    const romaji = show.romaji && item.romaji && item.romaji.length === words.length ? item.romaji : null;
-    // A cheer without readings still shows its words when only readings were chosen.
-    const original = show.original || (!kana && !romaji);
+    const columns = words.map((word, i) => V.rubyColumn(word, item.kana?.[i], item.romaji?.[i], show));
     band.append(h('span', { class: 'item', style: color ? { '--member': color } : undefined },
       h('span', { class: 'kind meta' }, item.label),
-      words.map((word, i) => h('span', { class: 'w' + (item.activeWord !== null && i <= item.activeWord ? ' on' : '') },
-        kana ? h('span', { class: 'kana', lang: 'ja' }, kana[i]) : null,
-        original ? h('span', { class: 'orig', lang: 'ja' }, word) : null,
-        romaji ? h('span', { class: 'romaji', lang: 'ja-Latn' }, romaji[i]) : null))));
+      columns.map((column, i) => h('span', { class: i === item.activeWord ? 'w on' : i < item.activeWord ? 'w past' : 'w' },
+        h('span', { class: 'orig', lang: !show.original && !show.kana && item.romaji?.[i] ? 'ja-Latn' : 'ja' },
+          column.segments.map(segment => segment.ruby
+            ? h('ruby', {}, segment.base, h('rt', {}, segment.ruby))
+            : segment.base)),
+        column.romaji ? h('span', { class: 'romaji', lang: 'ja-Latn' }, column.romaji) : null))));
   }
   if (view.upcoming) {
     band.append(h('span', { class: 'next' }, '下一条：', view.upcoming.title || view.upcoming.text || ''),

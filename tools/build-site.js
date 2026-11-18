@@ -90,7 +90,7 @@ ${[...artists.values()].map(artist => `<div class="artist" data-artist><h3>${use
 ${[...artist.songs.values()].map(song => {
     const search = plainUserText([artist.name, song.title, ...song.files.flatMap(entry => entry.authors)].join(' '));
     return `<li class="song card" data-search="${escapeHTML(search)}"><h4>${userText(song.title)}</h4><ul class="files">
-${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</span><span class="meta">${escapeHTML(PERMISSIONS[entry.permission] || entry.permission)} · ${escapeHTML(licenseLabel(entry))} · ${entry.events} 处标记 · 时长 ${clock(entry.song.duration)}</span><span class="actions"><a href="/editor/?cheer=${encodeURIComponent(href(entry.path))}">在网页中播放</a><a href="${href(entry.path)}" download>下载</a><a href="${REPO}/blob/main/${entry.path.split('/').map(encodeURIComponent).join('/')}">GitHub</a></span></li>`).join('\n')}
+${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</span><span class="meta">${escapeHTML(PERMISSIONS[entry.permission] || entry.permission)} · ${escapeHTML(licenseLabel(entry))} · ${entry.events} 处标记 · 时长 ${clock(entry.song.duration)}</span><span class="actions"><a href="/editor/?cheer=${encodeURIComponent(href(entry.path))}">在网页中播放</a><a href="liveglow://cheer/import?path=${encodeURIComponent(entry.path).replace(/'/g, '%27')}">在映场中打开</a><a href="${href(entry.path)}" download>下载</a><a href="${REPO}/blob/main/${entry.path.split('/').map(encodeURIComponent).join('/')}">GitHub</a></span></li>`).join('\n')}
 </ul></li>`;
   }).join('\n')}
 </ul></div>`).join('\n')}`;
@@ -111,7 +111,7 @@ ${browse}
 <section aria-labelledby="use"><h2 id="use">怎样使用</h2>
 <div class="grid">
 <div class="card"><h3>在网页上</h3><ol class="steps"><li>打开<a href="/editor/">制作应援</a>，选择本地音频。</li><li>加载歌词，按住成员按钮或数字键边听边点，或从通用 MIX 一点插入。</li><li>保存到本机，或直接投稿到 CheerBook。</li></ol></div>
-<div class="card"><h3>在映场中</h3><ol class="steps"><li>下载这首歌的 <code>.cheer.json</code>。</li><li>在<a href="${LIVEGLOW}">映场</a>“正在播放”侧栏的“应援”标签点“导入…”。</li><li>播放到匹配的录音时，MIX 与 call 会跟着歌词出现。</li></ol></div>
+<div class="card"><h3>在映场中</h3><ol class="steps"><li>点应援文件旁的“在映场中打开”，在支持社区应援的版本中预览并确认导入。</li><li>使用较早版本时，可以下载文件，在<a href="${LIVEGLOW}">映场</a>“正在播放”侧栏的“应援”标签点“导入…”。</li><li>播放到匹配的录音时，MIX 与 call 会跟着歌词出现。</li></ol></div>
 <div class="card"><h3>投稿</h3><p>只收自己听写打轴、或有开放许可 / 原作者同意的时间轴，不能有歌词原文。按<a href="${REPO}/blob/main/CONTRIBUTING.md">投稿指南</a>在 GitHub 上发起 Pull Request，检查会自动运行。</p></div>
 <div class="card"><h3>MIX</h3><p><a href="/mix/">MIX 页</a>收录通用 MIX 与各位艺人的专属 MIX。你可以<a href="/editor/mix/?type=proposal">提议通用 MIX</a>，审核后并入内置库；也可以<a href="/editor/mix/?type=artist">投稿艺人专属 MIX</a>，制作这位艺人的歌时就能一点插入。</p></div>
 <div class="card"><h3>给开发者</h3><p>格式说明见 <a href="${REPO}/blob/main/spec/README.md">spec/README.md</a>；机器可读的 <a href="/index.json">index.json</a>、<a href="/spec/cheer.schema.json">JSON Schema</a>、<a href="/spec/mix-library.json">MIX 库</a>与<a href="/mix/artists.json">艺人专属 MIX</a>都可以直接获取。</p></div>

@@ -74,3 +74,19 @@ test('the spring is critically damped: it rises without overshoot and settles in
   assert.ok(points.every(point => point <= 1));
   assert.ok(duration >= 500 && duration <= 900, String(duration));
 });
+
+test('the web band gives each kanji run the same reading as Liveglow', () => {
+  const { cases } = require('./fixtures/cheer-ruby-segments.json');
+  for (const { word, kana, segments } of cases) {
+    const actual = V.rubySegments(word, kana).map(({ base, ruby }) => ruby ? [base, ruby] : [base]);
+    assert.deepEqual(actual, segments, word);
+  }
+});
+
+test('the band keeps the written word when a selected reading is empty', () => {
+  const column = (kana, romaji, show) => V.rubyColumn('空', kana, romaji, show);
+  assert.deepEqual(column('', '', { kana: true, romaji: true }), { segments: [{ base: '空', ruby: null }], romaji: null });
+  assert.deepEqual(column('そら', 'sora', { original: true, kana: true, romaji: true }), { segments: [{ base: '空', ruby: 'そら' }], romaji: 'sora' });
+  assert.deepEqual(column('そら', 'sora', { kana: true, romaji: true }), { segments: [{ base: 'そら', ruby: null }], romaji: 'sora' });
+  assert.deepEqual(column('そら', 'sora', { romaji: true }), { segments: [{ base: 'sora', ruby: null }], romaji: null });
+});

@@ -1,0 +1,29 @@
+{
+  "about": "Mira: furigana alignment (CheerRuby.segments / stageCheerRubySegments), the same cases for the stage and the native layout. Each segment is [base] or [base, furigana]. Made-up words only.",
+  "cases": [
+    {"word":"十六夜！","kana":"いざよい","segments":[["十六夜","いざよい"],["！"]],"note":"one kanji run takes the whole reading; punctuation takes none"},
+    {"word":"言いたいことがあるんだよ！","kana":"いいたいことがあるんだよ","segments":[["言","い"],["いたいことがあるんだよ！"]],"note":"kanji then kana"},
+    {"word":"俺が生まれてきた理由！","kana":"おれがうまれてきたりゆう","segments":[["俺","おれ"],["が"],["生","う"],["まれてきた"],["理由","りゆう"],["！"]],"note":"kanji and kana alternate"},
+    {"word":"好き好き大好き！","kana":"すきすきだいすき","segments":[["好","す"],["き"],["好","す"],["き"],["大好","だいす"],["き！"]],"note":"the same kana anchor repeats"},
+    {"word":"言い合い","kana":"いいあい","segments":[["言","い"],["い"],["合","あ"],["い"]],"note":"the anchor kana also starts the reading"},
+    {"word":"可愛い","kana":"かわいい","segments":[["可愛","かわい"],["い"]],"note":"the first い after the kanji leaves the rest unfit, so the run takes one more kana"},
+    {"word":"（飛！","kana":"とび","segments":[["（"],["飛","とび"],["！"]],"note":"brackets take no reading"},
+    {"word":"夢ヶ丘","kana":"ゆめがおか","segments":[["夢ヶ丘","ゆめがおか"]],"note":"ヶ counts as kanji"},
+    {"word":"ドキドキ大作戦！","kana":"ドキドキだいさくせん","segments":[["ドキドキ"],["大作戦","だいさくせん"],["！"]],"note":"katakana in the word and the reading compare as hiragana"},
+    {"word":"君のハート","kana":"キミノハート","segments":[["君","きみ"],["のハート"]],"note":"a katakana reading becomes hiragana over the kanji"},
+    {"word":"十六夜！","kana":"いざ よい！","segments":[["十六夜","いざよい"],["！"]],"note":"spaces and punctuation in the reading are dropped"},
+    {"word":"Go!夢","kana":"ゆめ","segments":[["Go!"],["夢","ゆめ"]],"note":"Latin letters take no reading"},
+    {"word":"{name}の未来！","kana":"{name}のみらい","segments":[["{name}の"],["未来","みらい"],["！"]],"note":"a name slot takes no reading"},
+    {"word":"{名前}さん大好き！","kana":"{名前}さんだいすき","segments":[["{名前}さん"],["大好","だいす"],["き！"]],"note":"kanji inside a name slot are not read"},
+    {"word":"{名前}！","kana":"{名前}","segments":[["{名前}！"]],"note":"kanji only inside a slot: no furigana"},
+    {"word":"愛{name}夢","kana":"あい{name}ゆめ","segments":[["愛","あ"],["{name}"],["夢","いゆめ"]],"note":"kept as before: with nothing between two kanji runs the first takes one kana"},
+    {"word":"空！","kana":"そら\u0301","segments":[["空","そら"],["！"]],"note":"combining accent is omitted from the kana reading, without dropping the kana before it"},
+    {"word":"タイガー！","kana":"たいがー","segments":[["タイガー！"]],"note":"no kanji, no furigana"},
+    {"word":"大好き","kana":null,"segments":[["大好き"]],"note":"no reading"},
+    {"word":"大好き","kana":"","segments":[["大好き"]],"note":"an empty reading"},
+    {"word":"見る！","kana":"みた","segments":[["見る！","みた"]],"note":"unaligned: the reading goes over the whole word"},
+    {"word":"お祭り","kana":"まつり","segments":[["お祭り","まつり"]],"note":"unaligned: the leading kana is missing from the reading"},
+    {"word":"大好き","kana":"だいすけ","segments":[["大好き","だいすけ"]],"note":"unaligned: the trailing kana does not match"},
+    {"word":"生き生き","kana":"いき","segments":[["生き生き","いき"]],"note":"unaligned: too short for every kanji run to read a kana"}
+  ]
+}

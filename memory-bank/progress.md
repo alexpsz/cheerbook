@@ -2,19 +2,21 @@
 
 当前状态、最近完成、下一步与未决问题。只写事实，区分已验证与未验证。
 
-## 2026-11-22 合并后不写回 main（本地分支，未推送）
+## 2026-11-22 合并后不写回 main（已推送）
 
 上线前独立审查（只读核对代码、GitHub 与 Cloudflare 设置）的结论与改动，决定见 C-013。
 
 **核实到的事实**：`main` 尚无规则集或分支保护；仓库还没有过 Pull Request，“自动合并”从未对真实 PR 运行；投稿 Worker 已部署但没有路由，`/api/submissions/config` 返回站点的 404 页。网站与映场读的 `index.json` 由 `tools/build-site.js` 在 Cloudflare Pages 构建时生成，仓库根目录那一份没有运行时读者。用 `GITHUB_TOKEN` 推送不会启动其他工作流，但 Cloudflare Pages 照常构建（`9f544a3` 为例）。
 
-**改动（分支 `claude/no-generated-writeback`）**：“自动合并”合并后不再派发其他工作流，去掉 `actions: write`；“更新索引”改为只能手动运行的“更新记录”（`.github/workflows/records.yml`），把 `contributors.json` 与 MIX 并入的结果推到 `records/` 分支，不再推送 `main`；删除仓库中的 `index.json` 与 `tools/build-index.js`；`tools/scope.js` 不再豁免 `index.json`，并只在提议文件被删除时放行“提议文件与 `spec/mix-library.json`（及 `contributors.json`）同时改动”，比较时不再合并改名；手动运行时 `recordedThrough` 失效会报错而不是跳过提交；同步 README、投稿指南、审核标准、部署说明、下架规则与 AGENTS.md。
+**改动（`1f744e2`）**：“自动合并”合并后不再派发其他工作流，去掉 `actions: write`；“更新索引”改为只能手动运行的“更新记录”（`.github/workflows/records.yml`），把 `contributors.json` 与 MIX 并入的结果推到 `records/` 分支，不再推送 `main`；删除仓库中的 `index.json` 与 `tools/build-index.js`；`tools/scope.js` 不再豁免 `index.json`，并只在提议文件被删除时放行“提议文件与 `spec/mix-library.json`（及 `contributors.json`）同时改动”，比较时不再合并改名；手动运行时 `recordedThrough` 失效会报错而不是跳过提交；同步 README、投稿指南、审核标准、部署说明、下架规则与 AGENTS.md。
 
 **已验证（本地）**：343 项测试通过（新增“没有工作流直接写 `main`”与修改范围的断言），`npm run check` 通过，静态站点生成且含 `index.json`。
 
 **未验证（要等真实 PR）**：GitHub App 所开 PR 是否无需批准即触发“检查”与“投稿审核”；`GITHUB_TOKEN` 的合并在规则集下通过；合并产生的推送触发 Cloudflare Pages 构建；必需状态的来源锁定 GitHub Actions 时对检查运行与提交状态都生效；另一份投稿先合并后 Update branch 的重新检查与自动合并；“更新记录”的分支推送与随后的 PR。
 
-**尚未执行（需维护者授权）**：推送本分支；仓库设置（只允许 Squash、建议更新分支）；`main` 规则集；开放 Worker 路由。注意仓库的 `wrangler.jsonc` 含生产路由，执行 `wrangler deploy` 即开放投稿入口。
+**已上线（2026-11-22，维护者授权：“推送到 main”）**：`1f744e2` 快进推送到 `main`。“检查”成功，“自动合并”按条件跳过，没有其他工作流运行，`main` 上没有多出提交；工作流列表中“更新索引”已由“更新记录”取代。Cloudflare Pages 对 `1f744e2` 的生产部署成功；仓库根目录已无 `index.json`，网站的 `/index.json` 仍由构建生成（内容为空库）。投稿接口仍未开放（`/api/submissions/config` 返回 404，区域内没有 Worker 路由）。
+
+**尚未执行（需维护者授权）**：仓库设置（只允许 Squash、建议更新分支）；`main` 规则集；开放 Worker 路由。注意仓库的 `wrangler.jsonc` 含生产路由，执行 `wrangler deploy` 即开放投稿入口。
 
 ## 2026-11-22 免账号投稿和三档审核（本地）
 

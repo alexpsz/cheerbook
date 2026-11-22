@@ -4,7 +4,7 @@
 
 | 种类 | 位置 | 合并后 |
 | --- | --- | --- |
-| 通用 MIX 提议 | `mix/proposals/<编号>.mix.json` | 并入内置 MIX 库 `spec/mix-library.json`，提议文件随即删除 |
+| 通用 MIX 提议 | `mix/proposals/<编号>.mix.json` | 维护者运行“更新记录”后并入内置 MIX 库 `spec/mix-library.json`，提议文件随之删除 |
 | 艺人专属 MIX | `mix/artists/<艺人>/<编号>.mix.json` | 留在这里，网站上可浏览、下载，制作这位艺人的歌时编辑器提供并推荐 |
 
 文件用 UTF-8（不带 BOM），不超过 64 KB，同一个字段不能写两次，不能有下面没列出的字段。

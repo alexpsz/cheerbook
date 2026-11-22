@@ -41,7 +41,7 @@ jobs:
         run: npm ci --prefix base/worker --ignore-scripts --no-audit --no-fund
       - name: 修改范围
         if: github.event_name == 'pull_request'
-        run: git -C target diff -z --name-only HEAD^1 HEAD | node base/tools/scope.js
+        run: git -C target diff -z --no-renames --name-only HEAD^1 HEAD | node base/tools/scope.js --root target
       - name: 检查应援文件与 MIX 库
         if: ${{ !cancelled() }}
         run: node base/tools/check.js target

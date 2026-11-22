@@ -450,6 +450,20 @@ test('a merge commit never credits the files it brings in, even when the line of
   assert.equal(manualRun.status, 0, manualRun.stderr);
   assert.deepEqual(readRecords(root), model({}, fm), 'OTHER\'s file is never credited to FAN');
   assert.match(manualRun.stderr, /合并提交/);
+  // "更新记录" calls it exactly like this: no --before and nobody to credit a push to.
+  writeRecords(root, model({}, c0));
+  const workflowRun = record(root, '--after', fm, '--pulls', pulls, '--branch', 'main');
+  assert.equal(workflowRun.status, 0, workflowRun.stderr);
+  assert.deepEqual(readRecords(root), model({}, fm));
+  assert.match(workflowRun.stderr, /等这次记录合并到 main 之后/);
+  // A cursor that is not in history stops a manual run instead of skipping the commits in between;
+  // --pending still answers "cannot tell", so only the maintainer can approve meanwhile.
+  writeRecords(root, model({}, 'f'.repeat(40)));
+  const lost = record(root, '--after', fm, '--pulls', pulls, '--branch', 'main');
+  assert.equal(lost.status, 1);
+  assert.match(lost.stderr, /recordedThrough 不在/);
+  assert.deepEqual(readRecords(root), model({}, 'f'.repeat(40)), 'nothing is written');
+  assert.equal(record(root, '--after', fm, '--pending').stdout.trim(), 'null');
 });
 
 test('when the line is broken, a file deleted and added again in between loses its old record', { skip: !hasGit && 'git is not installed' }, () => {
@@ -558,7 +572,9 @@ test('auto-merge runs only after "检查" passes on a pull request and never run
   assert.equal(triggers, '\non:\n  workflow_run:\n    workflows: [检查]\n    types: [completed]\n');
   assert.doesNotMatch(text, /pull_request_target/);
   assert.match(text, /^permissions: \{\}$/m);
-  assert.deepEqual(jobPermissions(text), ['actions: write', 'contents: write', 'pull-requests: write', 'statuses: read']);
+  assert.deepEqual(jobPermissions(text), ['contents: write', 'pull-requests: write', 'statuses: read']);
+  // The merge is the only write: nothing is started or pushed afterwards (the website builds its own index).
+  assert.doesNotMatch(text, /dispatches|git push|git commit/);
   for (const condition of ["github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.event == 'pull_request'",
     "github.event.workflow_run.path == '.github/workflows/check.yml'"]) {
     assert.ok(text.includes(condition), condition);
@@ -593,7 +609,7 @@ test('auto-merge runs only after "检查" passes on a pull request and never run
 
 test('both workflows pin their actions to the commits check.yml uses and keep no token in the checkout', () => {
   const allowed = new Set(pins(workflow('check.yml')));
-  for (const name of ['auto-merge.yml', 'index.yml']) {
+  for (const name of ['auto-merge.yml', 'records.yml']) {
     const text = workflow(name);
     assert.ok(pins(text).length >= 2, name);
     for (const use of pins(text)) {
@@ -605,22 +621,23 @@ test('both workflows pin their actions to the commits check.yml uses and keep no
   }
 });
 
-test('the index workflow records contributors, regenerates the index and pushes in one job with the token only where needed', () => {
-  const text = workflow('index.yml');
+test('the records workflow runs only by hand and pushes its result to a records/ branch, never to main, with the token only where needed', () => {
+  const text = workflow('records.yml');
   const triggers = text.slice(text.indexOf('\non:\n'), text.indexOf('\npermissions:'));
-  for (const source of ["'cheers/**'", "'mix/**'", "'contributors.json'", "'lib/**'", "'tools/**'"]) assert.ok(triggers.includes(source), source);
-  assert.match(triggers, /^ {2}workflow_dispatch:$/m);
-  assert.doesNotMatch(triggers, /pull_request/);
+  // Started by a maintainer only: a merge does not start it, and it cannot be reached from a pull request.
+  assert.equal(triggers, '\non:\n  workflow_dispatch:\n');
   assert.match(text, /^permissions: \{\}$/m);
   assert.deepEqual(jobPermissions(text), ['contents: write', 'pull-requests: read']);
   assert.match(text, /^ {4}if: github\.ref == 'refs\/heads\/main'$/m);
-  assert.deepEqual([...new Set(expressions(text))].sort(), ['github.event.before', 'secrets.GITHUB_TOKEN']);
+  assert.deepEqual([...new Set(expressions(text))].sort(), ['secrets.GITHUB_TOKEN']);
   const steps = stepsOf(text);
   assert.match(steps.find(step => step.text.includes('actions/checkout@')).text, /fetch-depth: 0/);
-  const order = ['--list', 'tools/accept-mix-proposals.js', '--pulls', 'tools/build-index.js', 'git push'].map(marker => steps.findIndex(step => step.run && step.run.includes(marker)));
+  // The exception for accepting proposals depends on both: every path listed, and the files to look at.
+  assert.match(workflow('check.yml'), /diff -z --no-renames --name-only HEAD\^1 HEAD \| node base\/tools\/scope\.js --root target\n/);
+  const order = ['--list', 'tools/accept-mix-proposals.js', '--pulls', 'git push'].map(marker => steps.findIndex(step => step.run && step.run.includes(marker)));
   assert.ok(order.every(at => at >= 0) && order.every((at, i) => i === 0 || at > order[i - 1]), `order ${order}`);
   const withToken = steps.filter(step => /GH_TOKEN|PUSH_TOKEN|secrets\./.test(step.text)).map(step => step.name);
-  assert.deepEqual(withToken, ['查询这些提交来自哪个 Pull Request', '提交变化']);
+  assert.deepEqual(withToken, ['查询这些提交来自哪个 Pull Request', '推送到记录分支']);
   for (const step of steps.filter(step => step.run !== undefined)) {
     assert.doesNotMatch(step.run, /\$\{\{/, step.name);
     if (withToken.includes(step.name)) assert.doesNotMatch(step.run, /\bnode\b/, step.name);
@@ -628,10 +645,31 @@ test('the index workflow records contributors, regenerates the index and pushes 
   const lookup = steps.find(step => step.name === '查询这些提交来自哪个 Pull Request');
   assert.match(lookup.run, /\^\[0-9a-f\]\{40\}/, 'only commit ids reach the API call');
   const recordStep = steps.find(step => step.run && step.run.includes('--pulls'));
-  assert.match(recordStep.run, /--before "\$BEFORE" --after "\$GITHUB_SHA" --pulls "\$RUNNER_TEMP\/pulls" --branch "\$GITHUB_REF_NAME" --actor "\$GITHUB_ACTOR" --actor-id "\$GITHUB_ACTOR_ID"/);
+  // A manual run has no pusher to credit: only pull requests' authors are recorded.
+  assert.match(recordStep.run, /--after "\$GITHUB_SHA" --pulls "\$RUNNER_TEMP\/pulls" --branch "\$GITHUB_REF_NAME"$/);
   const push = steps.find(step => step.run && step.run.includes('git push'));
-  assert.match(push.run, /for file in spec\/mix-library\.json mix\/proposals contributors\.json index\.json; do/);
+  assert.match(push.run, /for file in spec\/mix-library\.json mix\/proposals contributors\.json; do/);
   assert.doesNotMatch(push.run, /git add (-A|\.)(\s|$)/);
+  // The branch name is made of the run's own numbers, and the only push goes there.
+  assert.match(push.run, /branch="records\/\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT"/);
+  assert.deepEqual(push.run.match(/git push .*/g).map(line => line.split(' ').at(-1)), ['"HEAD:refs/heads/$branch"']);
+});
+
+test('no workflow writes to main except by merging a checked pull request, and index.json is not kept in the repository', () => {
+  const folder = path.join(__dirname, '..', '.github', 'workflows');
+  const names = fs.readdirSync(folder).filter(name => name.endsWith('.yml')).sort();
+  assert.deepEqual(names, ['auto-merge.yml', 'check.yml', 'records.yml', 'review-policy.yml']);
+  for (const name of names) {
+    const text = workflow(name);
+    assert.doesNotMatch(text, /HEAD:main|HEAD:refs\/heads\/main|:main\b|actions\/workflows\/.*dispatches/, name);
+    if (name !== 'records.yml') assert.doesNotMatch(text, /git push/, name);
+    // Only the merge and the records branch need to write contents.
+    assert.equal(/contents: write/.test(text), name === 'auto-merge.yml' || name === 'records.yml', name);
+  }
+  // The website builds index.json from the merged files (tests/site.test.js); a copy in the
+  // repository would need a push to main after every merge.
+  assert.equal(fs.existsSync(path.join(__dirname, '..', 'index.json')), false);
+  assert.equal(fs.existsSync(path.join(__dirname, '..', 'tools', 'build-index.js')), false);
 });
 
 // The two node steps of auto-merge.yml, run as the runner would (`shell: node {0}`) on fixtures.
@@ -761,7 +799,6 @@ test('the required review status binds real human approvals to this PR head and 
   assert.doesNotMatch(reviewWorkflow, /contents: write|pull-requests: write|pull_request\.head/);
   for (const step of stepsOf(reviewWorkflow)) if (step.run) assert.doesNotMatch(step.run, /\$\{\{/);
   assert.match(reviewWorkflow, /statuses: write/);
-  for (const name of ['auto-merge.yml', 'index.yml']) {
-    assert.match(workflow(name), /group: cheerbook-main-writers\n\s+queue: max/);
-  }
+  // Merges are queued one at a time; nothing else writes to main.
+  assert.match(workflow('auto-merge.yml'), /group: cheerbook-main-writers\n\s+queue: max/);
 });

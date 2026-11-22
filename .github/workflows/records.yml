@@ -1,0 +1,88 @@
+# Brings the records kept in the repository up to date, when a maintainer starts it by hand:
+# accepted MIX proposals go into spec/mix-library.json (tools/accept-mix-proposals.js, when it
+# exists) and contributors.json records the GitHub account that contributed each new file
+# (tools/record-contributors.js, C-011). Nothing here writes to main. main changes only through
+# reviewed pull requests, so the run commits to a new records/ branch and prints the link that opens
+# the pull request; a maintainer opens it, because workflows here may not open pull requests and
+# one opened with a workflow's token would leave "检查" waiting for approval, and then approves and
+# merges it like any other change to these files (docs/review.md §6).
+# index.json is not kept in the repository: the website builds it from the merged files
+# (tools/build-site.js), so a merged song needs no run of this workflow to be listed.
+# The records continue from the commit contributors.json was last brought up to date with, so runs
+# may be as far apart as the maintainer likes, and a run that failed is caught up by the next one.
+# Until a file's record is current, only the maintainer can approve a change to it
+# (tools/review-policy.js reads `record-contributors.js --pending`).
+# The checkout keeps no token. The token is given to two steps only: the lookup of the pull
+# request each new contribution came from (read-only API calls; no code from the repository runs
+# there) and the final push to the records/ branch, after the tools have run.
+name: 更新记录
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  records:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: 找出新增投稿的提交
+        run: node tools/record-contributors.js --after "$GITHUB_SHA" --list > "$RUNNER_TEMP/commits.txt"
+      - name: 查询这些提交来自哪个 Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pulls"
+          while IFS= read -r sha; do
+            if [[ ! "$sha" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]]; then
+              echo "提交编号的格式不对。"
+              exit 1
+            fi
+            gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" > "$RUNNER_TEMP/pulls/$sha.json"
+          done < "$RUNNER_TEMP/commits.txt"
+      - name: 收录通过的 MIX 提议
+        run: |
+          if [ -f tools/accept-mix-proposals.js ]; then
+            node tools/accept-mix-proposals.js
+          else
+            echo "还没有 MIX 提议工具，跳过。"
+          fi
+      - name: 记录投稿者
+        run: node tools/record-contributors.js --after "$GITHUB_SHA" --pulls "$RUNNER_TEMP/pulls" --branch "$GITHUB_REF_NAME"
+      - name: 推送到记录分支
+        env:
+          PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          changed=()
+          for file in spec/mix-library.json mix/proposals contributors.json; do
+            if [ -n "$(git status --porcelain -- "$file")" ]; then
+              changed+=("$file")
+            fi
+          done
+          if [ "${#changed[@]}" -eq 0 ]; then
+            echo "记录已是最新，没有需要提交的变化。"
+            exit 0
+          fi
+          # A new branch for every run, so a second run never has to overwrite an earlier one.
+          branch="records/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all -- "${changed[@]}"
+          git commit -m "records: update ${changed[*]}"
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$branch"
+          link="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$branch?expand=1"
+          echo "已推送到分支 $branch。请打开下面的链接发起 Pull Request，核对后按人工审核流程合并："
+          echo "$link"
+          echo "记录的更新已推送到分支 \`$branch\`。[发起 Pull Request]($link)，核对后按人工审核流程合并。" >> "$GITHUB_STEP_SUMMARY"

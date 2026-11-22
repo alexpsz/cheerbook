@@ -179,6 +179,8 @@ test('a pull request may not mix contributions with other changes', () => {
   const scope = input => spawnSync(process.execPath, [path.join(ROOT, 'tools', 'scope.js')], { input, encoding: 'utf8' });
   assert.equal(scope('cheers/a/b/c.cheer.json\0lib/cheer.js\0').status, 1);
   assert.equal(scope('cheers/a/b/c.cheer.json\0cheers/a/b/d.cheer.json\0').status, 0);
+  // index.json is built with the website and is no longer a file of the repository.
+  assert.equal(scope('cheers/a/b/c.cheer.json\0index.json\0').status, 1);
   const code = scope('lib/cheer.js\0README.md\0');
   assert.equal(code.status, 0);
   assert.match(code.stdout, /逐行审查/);

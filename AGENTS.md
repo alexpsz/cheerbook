@@ -35,13 +35,13 @@
 
 ## 实现与验证
 
-- `npm test`（读取器对照 `spec/` 全部样例，社区规则测试）与 `npm run check`（`cheers/`、`mix/` 与 MIX 库）必须通过。测试不得依赖仓库当前的 `cheers/` 与 `index.json`，否则投稿会让测试失败。
+- `npm test`（读取器对照 `spec/` 全部样例，社区规则测试）与 `npm run check`（`cheers/`、`mix/` 与 MIX 库）必须通过。测试不得依赖仓库当前的 `cheers/`，否则投稿会让测试失败。
 - CI 从基准分支取检查代码，把 Pull Request 的文件当数据检查；检查输出里来自投稿者的文字一律转义，不能形成工作流命令。
 - 公共读取器与站点继续无第三方运行时依赖；Worker 用锁定的 JSON Schema 校验器执行权威 schema。只写 Node.js 22 可运行的代码。
 - 检查给投稿者看的消息用简体中文、写明文件与改法。
 - 网页编辑器（`/editor/`）与 MIX 表单（`/editor/mix/`）的规则都在 `lib/` 的纯模块里（`editor`、`suggest`、`lyrics`、`beat`、`messages`、`paths`、`mixes`、`contributors`，不用 Node API），构建时打成 `/editor/lib.js`；`site/editor/` 只负责把它们接到页面上。编辑与推荐规则与映场 Swift 一致，改动时两边同步（艺人专属 MIX 目前只在网页端）。
-- MIX 投稿（C-011）：通用 MIX 提议放 `mix/proposals/`，合并后由“更新索引”工作流运行 `tools/accept-mix-proposals.js` 并入 `spec/mix-library.json`；艺人专属 MIX 放 `mix/artists/`。格式见 `mix/README.md`，规则在 `lib/mixes.js`。内置库的变更要同步到映场仓库的 `spec/cheer/`（随映场下个版本）。
-- 网站由 `node tools/build-site.js` 生成到 `_site/`（不入库），Cloudflare Pages 在 `main` 更新后自动构建；页面中来自投稿的文字一律转义，不写内联脚本或样式（`_headers` 的 CSP 禁止）。
+- MIX 投稿（C-011）：通用 MIX 提议放 `mix/proposals/`，合并后由维护者手动运行“更新记录”工作流（`tools/accept-mix-proposals.js`），再合并由它的 `records/` 分支发起的 Pull Request，并入 `spec/mix-library.json`；艺人专属 MIX 放 `mix/artists/`。格式见 `mix/README.md`，规则在 `lib/mixes.js`。内置库的变更要同步到映场仓库的 `spec/cheer/`（随映场下个版本）。
+- 网站由 `node tools/build-site.js` 生成到 `_site/`（不入库），Cloudflare Pages 在 `main` 更新后自动构建，`index.json` 只在构建时生成、不入库，合并后没有工作流写回 `main`；页面中来自投稿的文字一律转义，不写内联脚本或样式（`_headers` 的 CSP 禁止）。
 
 ## Git
 

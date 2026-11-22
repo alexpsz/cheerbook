@@ -12,7 +12,7 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 
 ## 使用应援文件
 
-1. 在[网站](https://cheerbook.kozueginko.com)或 [`cheers/`](./cheers/) 里按艺人、歌名找到文件，下载 `.cheer.json`。所有收录文件也列在 [`index.json`](./index.json) 中。
+1. 在[网站](https://cheerbook.kozueginko.com)或 [`cheers/`](./cheers/) 里按艺人、歌名找到文件，下载 `.cheer.json`。所有收录文件也列在网站的 [`index.json`](https://cheerbook.kozueginko.com/index.json) 中。
 2. 在映场中打开“正在播放”侧栏的“应援”标签，点“导入…”选择文件。
 
 文件按录音匹配（ISRC、Apple Music 编号，或歌名、艺人与时长）。导入时映场会显示它是否与正在播放的歌匹配；不匹配的文件也会保存，播放到匹配的录音时使用。同一首歌的现场版、长度不同的版本可能对不上。
@@ -63,7 +63,7 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 | --- | --- |
 | [`cheers/`](./cheers/) | 社区投稿的应援文件：`cheers/<艺人>/<歌名>/<文件名>.cheer.json` |
 | [`mix/`](./mix/) | MIX 投稿：通用 MIX 提议（`mix/proposals/`，合并后并入内置库）与艺人专属 MIX（`mix/artists/<艺人>/`） |
-| [`index.json`](./index.json) | 全部收录的应援文件与艺人专属 MIX 的索引（合并后自动生成） |
+| 网站的 [`index.json`](https://cheerbook.kozueginko.com/index.json) | 全部收录的应援文件与艺人专属 MIX 的索引（网站每次构建时生成，不存放在仓库里） |
 | [`contributors.json`](./contributors.json) | 可核实的 GitHub 投稿账号（供人工审核原作者修改；免账号代投稿不登记机器人的身份） |
 | [`spec/`](./spec/) | 格式说明、JSON Schema、对照样例与内置 MIX 库 |
 | [`lib/`](./lib/)、[`tools/`](./tools/)、[`tests/`](./tests/) | 读取器、自动检查与网站生成（Node.js，无依赖） |

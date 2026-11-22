@@ -255,10 +255,8 @@ test('a proposal that clashes after both merged is left for the maintainer; the 
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'spec', 'mix-library.json'), 'utf8')).entries.at(-1).id, 'synthetic-chant');
   assert.ok(!fs.existsSync(path.join(root, 'mix', 'proposals', 'synthetic-chant.mix.json')));
   assert.ok(fs.existsSync(path.join(root, 'mix', 'proposals', 'twin-chant.mix.json')));
-  // The check stays red, but the index and the site still build.
+  // The check stays red, but the site (and the index.json in it) still builds.
   assert.equal(spawnSync(process.execPath, [path.join(root, 'tools', 'check.js'), root], { encoding: 'utf8' }).status, 1);
-  const index = spawnSync(process.execPath, [path.join(root, 'tools', 'build-index.js')], { encoding: 'utf8' });
-  assert.equal(index.status, 0, index.stderr);
   assert.deepEqual(buildSite(root, path.join(root, '_site')), { entries: 0, mixes: 0 });
   // A broken library itself still stops the tool.
   fs.writeFileSync(path.join(root, 'spec', 'mix-library.json'), '{');
@@ -360,8 +358,28 @@ test('a pull request keeps MIX contributions apart from other changes', () => {
   assert.equal(scope('mix/proposals/a.mix.json\0').status, 0);
   assert.equal(scope('mix/artists/甲/a.mix.json\0cheers/a/b/c.cheer.json\0').status, 0);
   assert.equal(scope('mix/artists/甲/a.mix.json\0lib/mixes.js\0').status, 1);
-  assert.equal(scope('mix/proposals/a.mix.json\0spec/mix-library.json\0').status, 1);
   assert.equal(scope('mix/artists/甲/a.mix.json\0contributors.json\0').status, 1);
+  // Adding a proposal and editing the library at once is refused, with or without the files to look at.
+  const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'cheerbook-scope-'));
+  fs.mkdirSync(path.join(tree, 'mix', 'proposals'), { recursive: true });
+  fs.writeFileSync(path.join(tree, 'mix', 'proposals', 'kept.mix.json'), '{}');
+  const scopeIn = input => spawnSync(process.execPath, [path.join(ROOT, 'tools', 'scope.js'), '--root', tree], { input, encoding: 'utf8' });
+  assert.equal(scope('mix/proposals/a.mix.json\0spec/mix-library.json\0').status, 1, 'no --root, no exception');
+  assert.equal(scopeIn('mix/proposals/kept.mix.json\0spec/mix-library.json\0').status, 1, 'the proposal is still there');
+  assert.equal(scopeIn('mix/proposals/a.mix.json\0mix/proposals/kept.mix.json\0spec/mix-library.json\0').status, 1);
+  // Accepting proposals into the built-in library ("更新记录") removes them and changes the library
+  // at once: allowed, and flagged for the maintainer like any other change to the library.
+  for (const accepted of ['mix/proposals/a.mix.json\0spec/mix-library.json\0', 'contributors.json\0mix/proposals/a.mix.json\0mix/proposals/b.mix.json\0spec/mix-library.json\0']) {
+    const run = scopeIn(accepted);
+    assert.equal(run.status, 0, accepted);
+    assert.match(run.stdout, /逐行审查/);
+  }
+  // Nothing else may ride along.
+  for (const mixed of ['mix/proposals/a.mix.json\0contributors.json\0', 'mix/proposals/a.mix.json\0spec/mix-library.json\0lib/mixes.js\0',
+    'mix/proposals/a.mix.json\0spec/mix-library.json\0spec/cheer.schema.json\0', 'mix/artists/甲/a.mix.json\0spec/mix-library.json\0',
+    'mix/proposals/a.mix.json\0cheers/a/b/c.cheer.json\0spec/mix-library.json\0', 'cheers/a/b/c.cheer.json\0spec/mix-library.json\0']) {
+    assert.equal(scopeIn(mixed).status, 1, mixed);
+  }
   assert.match(scope('contributors.json\0').stdout, /逐行审查/);
 });
 

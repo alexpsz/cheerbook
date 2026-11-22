@@ -23,8 +23,9 @@
 //     directly and is credited to --actor, who pushed it. Files added by a merge commit (which may
 //     bring in other people's files) or by a direct push from an earlier, failed run (who pushed
 //     it is no longer known) get no record, and a warning names them. --before is also where the
-//     walk starts when contributors.json has no usable `recordedThrough`; without either, only
-//     <after> is recorded.
+//     walk starts when contributors.json has no usable `recordedThrough`. Without --before, a
+//     contributors.json with no `recordedThrough` records only <after>, and one whose
+//     `recordedThrough` is not in <after>'s history stops the run (a manual run must not skip commits).
 //   node tools/record-contributors.js [--after <sha>] --pending
 //     Prints, as a JSON array, the contribution files added, removed or renamed on main after
 //     `recordedThrough` up to <after> (default HEAD), whose records may not be current yet; or
@@ -143,6 +144,12 @@ function main(argv) {
     return;
   }
 
+  // A manual run ("更新记录") has no --before to fall back on. Recording only <after> and moving
+  // the cursor there would silently skip every commit in between, so stop instead.
+  if (model.recordedThrough !== undefined && !cursor && values.before === '') {
+    throw new Error(`${FILE} 的 recordedThrough 不在 ${short(after)} 之前的历史中，又没有 --before 可以接续。请先把 recordedThrough 改为 main 历史上记录仍然准确的那个提交，再重新运行。`);
+  }
+
   // The commit main pointed to before the push being handled, and the commits that push brought.
   let pushedFrom = null;
   if (values.before !== '' && !/^0+$/.test(values.before)) {
@@ -163,6 +170,7 @@ function main(argv) {
 
   // Who contributed a commit: the author of the pull request it merged, or whoever pushed it when
   // it came with this push; null when that is not known.
+  const viaApp = new Set();
   const accountFor = sha => {
     if (values.pulls !== undefined) {
       const file = path.join(values.pulls, sha + '.json');
@@ -170,7 +178,10 @@ function main(argv) {
       const pulls = JSON.parse(fs.readFileSync(file, 'utf8'));
       // A submitting app represents many people. Never fall back to the maintainer who merged it.
       if (Array.isArray(pulls) && pulls.some(pr => pr?.merged_at && pr.merge_commit_sha === sha &&
-        pr.base?.ref === values.branch && (pr.user?.type === 'Bot' || pr.user?.login?.endsWith('[bot]')))) return null;
+        pr.base?.ref === values.branch && (pr.user?.type === 'Bot' || pr.user?.login?.endsWith('[bot]')))) {
+        viaApp.add(sha);
+        return null;
+      }
       const found = contributors.mergedPullRequest(sha, pulls, values.branch);
       if (found) return { user: found.user, via: `Pull Request #${found.number}` };
     }
@@ -211,9 +222,10 @@ function main(argv) {
       if (addsContribution(changes) && !who) {
         const why = merge ? '是有多个父提交的合并提交，其中的新文件可能来自别人' : '不是 Pull Request 的合并提交，也不是这次推送的，无法确认是谁推送的';
         for (const change of changes) {
-          if (change.status === 'added' && isContributionPath(change.path)) {
-            warn(`没有记录 ${quote(change.path)} 的投稿者：提交 ${short(sha)} ${why}。需要时，等这次运行的提交推送到 main 之后，再在 ${FILE} 中手动补记。`);
-          }
+          if (change.status !== 'added' || !isContributionPath(change.path)) continue;
+          // Expected for every accountless submission, so it is not a warning.
+          if (viaApp.has(sha)) console.log(`不登记 ${quote(change.path)} 的投稿账号：提交 ${short(sha)} 来自代投机器人的 Pull Request。`);
+          else warn(`没有记录 ${quote(change.path)} 的投稿者：提交 ${short(sha)} ${why}。需要时，等这次记录合并到 main 之后，再在 ${FILE} 中手动补记。`);
         }
         changes = changes.filter(change => change.status !== 'added');
       }
@@ -226,7 +238,7 @@ function main(argv) {
     const changes = diff(start, after);
     touched = true;
     for (const change of changes) {
-      if (change.status === 'added' && isContributionPath(change.path)) warn(`没有记录 ${quote(change.path)} 的投稿者；需要时，等这次运行的提交推送到 main 之后，再在 ${FILE} 中手动补记。`);
+      if (change.status === 'added' && isContributionPath(change.path)) warn(`没有记录 ${quote(change.path)} 的投稿者；需要时，等这次记录合并到 main 之后，再在 ${FILE} 中手动补记。`);
     }
     step = contributors.recordChanges(model, changes.filter(change => change.status !== 'added'), null);
     report(step.actions, '', `${short(after)} 中已没有这个文件`);

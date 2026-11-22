@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 // Moves merged proposals (mix/proposals/<id>.mix.json) into the built-in MIX library
-// spec/mix-library.json and deletes them (C-011 ③). Runs on main after a merge, before the index
-// is rebuilt (.github/workflows/index.yml); a maintainer can run it by hand too.
+// spec/mix-library.json and deletes them (C-011 ③). A maintainer starts it on main after a merge
+// (.github/workflows/records.yml, which puts the result on a branch for a pull request) or runs it by hand.
 //   node tools/accept-mix-proposals.js [--check] [--root <repository root>]
 // Each proposal must pass the community checks against the library as it grows. One that does not
 // (two pull requests checked green one at a time can still clash once both are merged) is left in
-// place and reported, and the others are accepted, so the rest of the post-merge work (contributor
-// records, index.json) is not held up; "检查" on main stays red until a maintainer removes or fixes
+// place and reported, and the others are accepted, so the rest of the records (contributors.json)
+// is not held up; "检查" on main stays red until a maintainer removes or fixes
 // it. The exit code is 1 only when the library itself is broken.
 // --check writes nothing and only reports what would be accepted.
 const fs = require('node:fs');

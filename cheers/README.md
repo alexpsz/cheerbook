@@ -6,4 +6,4 @@
 cheers/<艺人>/<歌名>/<文件名>.cheer.json
 ```
 
-这里只放 `.cheer.json`。投稿方法见[投稿指南](../CONTRIBUTING.md)，全部收录文件的列表见 [`index.json`](../index.json)。
+这里只放 `.cheer.json`。投稿方法见[投稿指南](../CONTRIBUTING.md)，全部收录文件的列表见网站的 [`index.json`](https://cheerbook.kozueginko.com/index.json)。

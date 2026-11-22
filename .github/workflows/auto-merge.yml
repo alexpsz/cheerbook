@@ -21,7 +21,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
       statuses: read
     env:
       CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -110,7 +109,7 @@ jobs:
           git fetch --no-tags origin "refs/pull/$NUMBER/merge"
           node tools/check-merge-tree.js "$CHECKED_SHA" "$RUNNER_TEMP/compare.json" "$RUNNER_TEMP/validated"
           node tools/check.js "$RUNNER_TEMP/validated"
-      - name: 合并并更新索引
+      - name: 合并
         if: steps.decide.outputs.merge == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -136,5 +135,6 @@ jobs:
             exit 1
           fi
           gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$NUMBER/merge" -f merge_method=squash -f sha="$CHECKED_SHA" --jq .message
-          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/index.yml/dispatches" -f ref="$DEFAULT_BRANCH"
-          echo "已合并 Pull Request #$NUMBER，并启动“更新索引”。"
+          # Nothing is written back to main after the merge: the website builds its own index.json
+          # from the merged files, and Cloudflare Pages rebuilds on this push.
+          echo "已合并 Pull Request #$NUMBER。网站会在 Cloudflare Pages 重建后列出新文件。"

@@ -18,7 +18,9 @@
 
 **保护已启用（2026-11-22，维护者选择“我可以绕过”，决定见 C-014）**：仓库合并方式只留 Squash，打开“建议更新分支”。规则集 `main: pull requests with required checks`（编号 27837462，只作用于默认分支）：必须经 Pull Request 合并（批准数 0，只允许 Squash）；必需状态 `check` 与 `cheerbook/review-policy`，来源均锁定 GitHub Actions，要求分支最新；禁止强制推送与删除分支；绕过名单只有仓库管理员。GitHub Actions 与投稿 App 不在名单内。
 
-**尚未执行（需维护者授权）**：用维护者账号演练两类不会入库的 PR；开放 Worker 路由；真实投稿验收。注意仓库的 `wrangler.jsonc` 含生产路由，执行 `wrangler deploy` 即开放投稿入口。
+**投稿入口已开放（2026-11-22，维护者授权：“开放入口”）**：在 Cloudflare 区域 `kozueginko.com` 给已部署的 `cheerbook-submissions` 加了路由 `cheerbook.kozueginko.com/api/submissions*`（与 `wrangler.jsonc` 相同，没有重新部署代码）。`/api/submissions/config` 返回公开 site key；没有来源或没有人机验证令牌的 POST 被拒绝（403），其他 `/api/` 路径仍由站点返回 404；首页、制作页、`/index.json`、`/mix/` 正常；核对过程没有产生 PR 或分支。停用时删除这条路由即可。线上 Worker 代码与仓库是否逐字节一致未核对。
+
+**尚未执行**：维护者用未登录 GitHub 的浏览器提交第一份自愿公开的作品，核对自动合并、网站部署与线上索引；库里有文件后再验证“修改已有文件”与“通用 MIX”会停下等待核准。注意仓库的 `wrangler.jsonc` 含生产路由，执行 `wrangler deploy` 即开放投稿入口。
 
 ## 2026-11-22 免账号投稿和三档审核（本地）
 

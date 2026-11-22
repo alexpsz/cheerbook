@@ -1,0 +1,7 @@
+/* The page Liveglow embeds for the challenge (/submit/): no chrome, and the app's panel shows through. */
+:root { color-scheme: light dark; }
+html, body { margin: 0; background: transparent; }
+body { font: 14px/1.5 system-ui, -apple-system, sans-serif; }
+[hidden] { display: none; }
+#challenge { min-height: 65px; }
+#standalone { margin: 0; padding: 16px; }

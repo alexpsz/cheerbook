@@ -21,6 +21,16 @@
 5. 对需人工合并的 PR，原 GitHub 作者或维护者新发一条独立评论 `/cheerbook approve <该 PR 最新的完整提交 SHA>`。工作流以 GitHub 数字账号核对，旧 SHA 或编辑过的评论不能批准新版本。无账号、无可靠作者记录或通用 MIX 由仓库维护者核准。该状态满足后再手动合并。
 6. GET `https://cheerbook.kozueginko.com/api/submissions/config` 应返回公开 site key。用无 GitHub 登录的浏览器打开制作页，确认人机验证、投稿结果及返回的 PR 链接均可见。日后停用可移除该 Worker 路由，保留 Pages 和已有 PR；泄露时先撤销相应 App 私钥或 Turnstile secret，再通过平台配置替换。
 
+## 映场内投稿页（`/submit/`）
+
+映场（Liveglow）的“分享…”面板可以直接投稿，不打开浏览器。表单（公开昵称、选填的公开联系方式、确认项）是映场的原生界面；人机验证只能在本站运行，接口也只接受本站发出的请求，所以面板内嵌本站的 `/submit/` 页面（`site/submit/embed.js`），由它显示验证并提交。
+
+- 页面与映场之间只有一条带回复的消息通道 `window.webkit.messageHandlers.cheerbookSubmission`：页面报告状态（加载、待验证、已验证、不可用、提交中）、结果（PR 链接）或失败原因，并发出一次“请求作品”；映场在用户按下“确认投稿”后才回复作品、昵称与联系方式。映场不向页面注入脚本。
+- 页面向同域的 `/api/submissions` 提交，请求内容与制作页相同，只是不带修改目标：本期只支持新投稿。服务端照常完整检查。
+- 一次验证只用于一次提交；失败后由映场重新加载页面，得到新的验证。
+- `/submit/` 有自己的内容安全策略：只允许本站脚本与样式、Cloudflare 的验证脚本与框架，只连接本站。页面不被搜索引擎收录，在浏览器里打开时只提示去制作页。
+- 修改 `site/submit/embed.js` 时，同步更新映场仓库测试夹具里的副本（`native/MiraNative/Tests/MiraStageHostTests/Fixtures/cheerbook-submit-embed.js`），它用于离线联调。
+
 ## 4. 如何验收
 
 离线检查使用编造的歌曲和注入的网络响应，不创建公开投稿。发布前可在维护者控制的测试部署和测试仓库做真实演练；代码中的正式仓库、域名及前端 PR 链接校验必须同时改成测试目标，测试 App 仅装测试仓库。真实正式站验收使用自愿投稿且可公开的内容。

@@ -235,6 +235,28 @@ export default lib;
 `;
 }
 
+// The page Liveglow embeds to submit without leaving the app: only the challenge and this site's
+// own script, no site chrome. Never indexed; opened in a browser it only points to the editor.
+function submitPage() {
+  return `<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>投稿验证 · CheerBook 应援本</title>
+<link rel="stylesheet" href="/submit/embed.css">
+<script src="/submit/embed.js" defer></script>
+</head>
+<body>
+<div id="challenge"></div>
+<p id="standalone" hidden>这个页面供映场（Liveglow）里的投稿面板使用。在浏览器里请到<a href="/editor/">制作页</a>投稿。</p>
+</body>
+</html>
+`;
+}
+
 // Cloudflare Pages reads this file for response headers. Pages may only use this site's own
 // files; the data files may be fetched from anywhere, so other players and tools can read them.
 // The editor also plays the chosen audio file (blob: URLs), analyses it in a worker of this site,
@@ -242,6 +264,8 @@ export default lib;
 const EDITOR_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src blob:; worker-src 'self'; connect-src 'self' https://lrclib.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 // Only the chart editor embeds the opt-in Turnstile script and frame. Its API stays same-origin.
 const SUBMISSION_CSP = EDITOR_CSP.replace("script-src 'self';", "script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com;");
+// The embedded submission page runs the challenge and posts to this site, and nothing else.
+const EMBED_CSP = "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const HEADERS = `/*
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
@@ -280,6 +304,14 @@ const HEADERS = `/*
 /editor/index.html
   ! Content-Security-Policy
   Content-Security-Policy: ${SUBMISSION_CSP}
+
+/submit/
+  ! Content-Security-Policy
+  Content-Security-Policy: ${EMBED_CSP}
+
+/submit/index.html
+  ! Content-Security-Policy
+  Content-Security-Policy: ${EMBED_CSP}
 `;
 
 /** Writes the site into `output`, which must be missing, empty or an earlier build of this tool. */
@@ -316,6 +348,8 @@ function buildSite(root, output) {
   for (const entry of fs.readdirSync(path.join(root, 'site', 'editor'), { withFileTypes: true })) {
     if (!pages.has(entry.name)) write('editor/' + entry.name, read('site/editor/' + entry.name));
   }
+  write('submit/index.html', submitPage());
+  for (const file of ['embed.js', 'embed.css']) write('submit/' + file, read('site/submit/' + file));
   write('_headers', HEADERS);
   write('index.json', JSON.stringify(buildIndex(entries, mixRecords), null, 2) + '\n');
   for (const entry of entries) write(entry.path, read(entry.path));
@@ -349,4 +383,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { buildSite, bundleLib, escapeHTML, href, clock, EDITOR_CSP };
+module.exports = { buildSite, bundleLib, escapeHTML, href, clock, EDITOR_CSP, EMBED_CSP };

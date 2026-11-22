@@ -16,7 +16,9 @@
 
 **已上线（2026-11-22，维护者授权：“推送到 main”）**：`1f744e2` 快进推送到 `main`。“检查”成功，“自动合并”按条件跳过，没有其他工作流运行，`main` 上没有多出提交；工作流列表中“更新索引”已由“更新记录”取代。Cloudflare Pages 对 `1f744e2` 的生产部署成功；仓库根目录已无 `index.json`，网站的 `/index.json` 仍由构建生成（内容为空库）。投稿接口仍未开放（`/api/submissions/config` 返回 404，区域内没有 Worker 路由）。
 
-**尚未执行（需维护者授权）**：仓库设置（只允许 Squash、建议更新分支）；`main` 规则集；开放 Worker 路由。注意仓库的 `wrangler.jsonc` 含生产路由，执行 `wrangler deploy` 即开放投稿入口。
+**保护已启用（2026-11-22，维护者选择“我可以绕过”，决定见 C-014）**：仓库合并方式只留 Squash，打开“建议更新分支”。规则集 `main: pull requests with required checks`（编号 27837462，只作用于默认分支）：必须经 Pull Request 合并（批准数 0，只允许 Squash）；必需状态 `check` 与 `cheerbook/review-policy`，来源均锁定 GitHub Actions，要求分支最新；禁止强制推送与删除分支；绕过名单只有仓库管理员。GitHub Actions 与投稿 App 不在名单内。
+
+**尚未执行（需维护者授权）**：用维护者账号演练两类不会入库的 PR；开放 Worker 路由；真实投稿验收。注意仓库的 `wrangler.jsonc` 含生产路由，执行 `wrangler deploy` 即开放投稿入口。
 
 ## 2026-11-22 免账号投稿和三档审核（本地）
 

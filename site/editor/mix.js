@@ -603,9 +603,9 @@ function renderActions(value, problems) {
   submit.disabled = problems.length > 0;
   let note;
   if (problems.length) note = `还有 ${problems.length} 个问题，改好后才能投稿。下载的文件可以留着以后再改。`;
-  else if (editing) note = `会复制文件内容，并打开 GitHub 上 ${state.editPath} 的编辑页：全选原内容、粘贴，再提议修改。修改自己投稿的文件，检查通过后自动合并；修改别人的文件要等维护者审核。`;
+  else if (editing) note = `会复制文件内容，并打开 GitHub 上 ${state.editPath} 的编辑页：全选原内容、粘贴，再提议修改。修改已有文件须经原作者或维护者批准，由维护者合并。`;
   else {
-    note = `会打开 GitHub 的新建文件页，文件名 ${path}，内容已填好；登录后提交 Pull Request，由维护者审核。`;
+    note = `会打开 GitHub 的新建文件页，文件名 ${path}，内容已填好；登录后提交 Pull Request。${state.type === 'artist' ? '新增的艺人专属 MIX 通过检查后自动收录。' : '通用 MIX 提案由维护者人工审核。'}`;
     if (state.editPath !== null) note += `这会成为一个新文件；原来的 ${state.editPath} 会保留，除非你另外删除它。`;
   }
   if (!problems.length && state.type === 'artist' && state.permission === 'consented') note += '记得在 Pull Request 的说明里写明原作者同意转载。';
@@ -816,7 +816,7 @@ async function submitFile() {
     await copy();
     window.open(`${REPO}/edit/main/${state.editPath.split('/').map(encodeURIComponent).join('/')}`, '_blank', 'noopener');
     status((copied ? '内容已复制到剪贴板，并打开了 GitHub 上这份文件的编辑页' : '没能复制到剪贴板，已下载文件，并打开了 GitHub 上这份文件的编辑页（把下载文件的内容粘贴进去）') +
-      '：全选原内容、粘贴，再提议修改（Propose changes）。修改自己投稿的文件，检查通过后自动合并；修改别人的文件要等维护者审核。');
+      '：全选原内容、粘贴，再提议修改（Propose changes）。修改已有文件须经原作者或维护者批准，由维护者合并。');
   } else {
     const base = `${REPO}/new/main?filename=${encodeURIComponent(path)}`;
     const full = `${base}&value=${encodeURIComponent(text)}`;

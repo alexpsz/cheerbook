@@ -167,10 +167,10 @@ test('the editor page loads only its own module script and stylesheet, under its
   assert.deepEqual(page.match(/<script[^>]*>/g), ['<script type="module" src="/editor/app.js">']);
   assert.match(page, /<link rel="stylesheet" href="\/editor\/editor.css">/);
   assert.doesNotMatch(page, /<style|\sstyle=|\son[a-z]+=/i);
-  for (const file of ['app.js', 'dom.js', 'analysis-worker.js', 'editor.css', 'lib.js']) assert.ok(fs.existsSync(path.join(out, 'editor', file)), file);
+  for (const file of ['app.js', 'dom.js', 'submission.js', 'analysis-worker.js', 'editor.css', 'lib.js']) assert.ok(fs.existsSync(path.join(out, 'editor', file)), file);
   assert.ok(!fs.existsSync(path.join(out, 'editor', 'page.html')));
   const headers = fs.readFileSync(path.join(out, '_headers'), 'utf8');
-  assert.match(headers, /\n\/editor\/\*\n {2}! Content-Security-Policy\n {2}Content-Security-Policy: [^\n]*media-src blob:; worker-src 'self'; connect-src 'self' https:\/\/lrclib\.net;/);
+  assert.match(headers, /\n\/editor\/\n {2}! Content-Security-Policy\n {2}Content-Security-Policy: [^\n]*media-src blob:; worker-src 'self'; connect-src 'self' https:\/\/lrclib\.net;/);
 });
 
 test('the browser bundle holds every pure lib module and none that touch the file system', async () => {

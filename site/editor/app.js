@@ -4,6 +4,7 @@
 // (bundled as /editor/lib.js); this file only wires them to the page. Audio and lyrics never leave
 // the browser, except that "在线查找" sends the song's title, artist and length to lrclib.net.
 import lib from '/editor/lib.js';
+import { setupSubmission } from '/editor/submission.js';
 import { h, clear, formatTime, formatClock, debounce, download, storage, typingTarget } from '/editor/dom.js';
 
 const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P, lyricsview: V, mixes: MX } = lib;
@@ -23,6 +24,7 @@ const state = {
   artistMixes: null,
   // The repository path of the community file this chart was opened from, so it can be edited in place.
   sourcePath: null,
+  sourceSha256: null,
   audioURL: null,
   audioName: '',
   lyrics: null,
@@ -105,7 +107,7 @@ const saveDraft = debounce(() => {
   if (!state.ed) return;
   const ok = storage.set(DRAFT_KEY, {
     chart: chart(), compensation: state.ed.compensation, lyricsText: state.lyricsText, dirty: state.dirty,
-    audioName: state.audioName, member: state.member, sourcePath: state.sourcePath, grid: state.manualGrid, savedAt: new Date().toISOString(),
+    audioName: state.audioName, member: state.member, sourcePath: state.sourcePath, sourceSha256: state.sourceSha256, grid: state.manualGrid, savedAt: new Date().toISOString(),
   });
   if (!ok && !state.storageWarned) {
     state.storageWarned = true;
@@ -1117,12 +1119,13 @@ async function lookupLyrics() {
 // Import, export and sharing.
 
 /** Opens a cheer file; `path` is its place in the repository when it came from the community library. */
-function importCheer(bytes, source, { path = null } = {}) {
+function importCheer(bytes, source, { path = null, sha256 = null } = {}) {
   const result = cheer.parse(bytes, { sharedFile: false });
   if (!result.valid) { status(`无法打开${source}：${result.errors.slice(0, 2).map(M.issueMessage).join(' ')}`, true); return false; }
   if (state.ed && hasWorkToLose() && !confirm('打开这份应援会替换当前草稿（还没有保存到本机）。上一份草稿会留一份备份。继续？')) return false;
   backUpDraft();
   state.sourcePath = path;
+  state.sourceSha256 = sha256;
   useChart(result.chart);
   state.dirty = false;
   saveDraft();
@@ -1212,7 +1215,19 @@ function renderShare() {
   const choice = shareChoice();
   $('share-referenced').hidden = choice.kind !== 'referenced';
   const author = $('share-author').value.trim();
-  const prepared = E.prepareForSharing(chart(), author, choice);
+  const original = chart().credits;
+  const published = !!chart().submittedBy;
+  const prepared = published ? chart() : E.prepareForSharing(chart(), author, choice);
+  // A submitter can publish a credited work. Carry all its existing authors, links and sources.
+  if (!published) {
+    if (original.authors.length) prepared.credits.authors = original.authors;
+    if (choice.kind === 'referenced') {
+      const missing = (original.sources || []).filter(source => source.kind !== 'self' && source.url !== choice.link);
+      prepared.credits.sources.push(...missing);
+    } else if (original.permission === 'original') {
+      prepared.credits.sources = original.sources;
+    }
+  }
   const outcome = E.shareOutcome(prepared, lyricTexts(), $('share-confirm').checked);
   $('share-confirm-row').hidden = outcome.kind !== 'unchecked' && !$('share-confirm').checked;
   let message = '', mode = null;
@@ -1221,7 +1236,8 @@ function renderShare() {
   else if (outcome.kind === 'noteOnly') { message = '参考了别人的版本、又不确定原作者是否同意时，只能分享来源说明（作者和链接），不能分享时间轴。'; mode = 'note'; }
   else if (outcome.kind === 'file') {
     mode = 'file';
-    message = choice.kind === 'referenced'
+    message = published ? '分享会保留原文件的全部作者、来源和使用条件。'
+      : choice.kind === 'referenced'
       ? '可以分享：会保留你和原作者的署名与链接。投稿时请在 Pull Request 里附上原作者同意的说明。'
       : '可以分享：自己听写的应援投稿到 CheerBook 默认以 CC BY 4.0 授权。';
   }
@@ -1230,11 +1246,12 @@ function renderShare() {
   $('share-download').disabled = !mode;
   $('share-submit').disabled = mode !== 'file';
   const editing = shareTarget(prepared);
-  $('share-submit').textContent = editing ? '提交修改…' : '投稿到 CheerBook…';
+  $('share-github').disabled = mode !== 'file';
+  $('share-submit').textContent = editing ? '免账号提交修改…' : '免账号投稿…';
   return { prepared, outcome, mode, author, editing };
 }
 
-async function submitShare() {
+async function submitShareOnGitHub() {
   const { prepared, outcome, mode, author, editing } = renderShare();
   if (mode !== 'file') return;
   const content = outcome.text;
@@ -1244,7 +1261,7 @@ async function submitShare() {
     try { await navigator.clipboard.writeText(content); copied = true; } catch { download(fileName(prepared.song, ' (分享)'), content); }
     window.open(`${REPO}/edit/main/${editing.split('/').map(encodeURIComponent).join('/')}`, '_blank', 'noopener');
     markExported();
-    status(`${copied ? '修改后的内容已复制到剪贴板' : '已下载修改后的文件'}，并打开了 GitHub 上原文件的编辑页面：全选、粘贴后按页面提示提交。改自己投稿的文件，检查通过后自动上线；改别人的文件要等维护者审核。`, true);
+    status(`${copied ? '修改后的内容已复制到剪贴板' : '已下载修改后的文件'}，并打开了 GitHub 上原文件的编辑页面：全选、粘贴后按页面提示提交。修改已有文件需要原作者或维护者批准，由维护者合并。`, true);
     $('share-dialog').close();
     return;
   }
@@ -1478,6 +1495,7 @@ function wire() {
     backUpDraft();
     state.dirty = false;
     state.sourcePath = null;
+    state.sourceSha256 = null;
     useChart(newChart({ title: chart().song.title, artist: chart().song.artist, duration: duration() }));
     $('more-dialog').close();
     status('已新建空白应援。', true);
@@ -1489,14 +1507,41 @@ function wire() {
     if (!draftSnapshot || draftSnapshot !== chart()) { event.preventDefault(); resetDraftLink(); }
   });
   // Share.
-  $('open-share').addEventListener('click', () => { $('share-confirm').checked = false; renderShare(); $('share-dialog').showModal(); });
+  const submission = setupSubmission($, () => {
+    const { mode, outcome, editing } = renderShare();
+    if (mode !== 'file') throw new Error('请先完成上方的文件与来源检查。');
+    if (editing && !state.sourceSha256) throw new Error('这份旧草稿缺少原文件版本。请先保存草稿，用 GitHub 对照原文提交修改，或从社区重新打开原文件。');
+    return { chart: outcome.text, ...(editing ? { target: { path: editing, sha256: state.sourceSha256 } } : {}) };
+  });
+  $('open-share').addEventListener('click', () => {
+    $('share-confirm').checked = false;
+    const credits = chart().credits;
+    const source = E.shareOrigin(credits);
+    const author = $('share-author');
+    author.value = credits.authors.map(entry => entry.name).join('、');
+    author.readOnly = credits.authors.length > 0;
+    const published = !!chart().submittedBy;
+    for (const field of document.querySelectorAll('#share-dialog input[name="origin"], #share-dialog input[name="consent"], #share-link')) {
+      field.disabled = published;
+    }
+    document.querySelector(`input[name="origin"][value="${source.kind === 'selfMade' ? 'self' : 'referenced'}"]`).checked = true;
+    $('share-link').value = source.link || '';
+    document.querySelector(`input[name="consent"][value="${source.consented ? 'yes' : 'unsure'}"]`).checked = true;
+    renderShare();
+    $('share-dialog').showModal();
+  });
   for (const input of document.querySelectorAll('#share-dialog input')) input.addEventListener('input', renderShare);
   $('share-download').addEventListener('click', () => {
     const { prepared, outcome, mode } = renderShare();
     if (mode === 'file') { download(fileName(prepared.song, ' (分享)'), outcome.text); markExported(); status('已下载分享文件。', true); }
     else if (mode === 'note') { download(fileName(prepared.song, ' (来源说明)').replace(/\.cheer\.json$/, '.txt'), outcome.note, 'text/plain;charset=utf-8'); status('已下载来源说明。', true); }
   });
-  $('share-submit').addEventListener('click', submitShare);
+  $('share-github').addEventListener('click', submitShareOnGitHub);
+  $('share-submit').addEventListener('click', () => {
+    const { mode, author } = renderShare();
+    if (mode === 'file') submission.open(chart().credits.authors.length ? '' : author);
+  });
+  $('share-dialog').addEventListener('close', submission.close);
   window.addEventListener('beforeunload', event => {
     if (saveDraft.pending()) saveDraft.flush();
     if (state.ed && hasWorkToLose()) { event.preventDefault(); event.returnValue = ''; }
@@ -1540,6 +1585,7 @@ async function start() {
   state.dirty = !!(draft && draft.dirty);
   state.member = draft && typeof draft.member === 'string' && chart().members.some(member => member.id === draft.member) ? draft.member : null;
   state.sourcePath = draft && typeof draft.sourcePath === 'string' && draft.sourcePath.startsWith(P.LIBRARY_DIR + '/') ? draft.sourcePath : null;
+  state.sourceSha256 = draft && /^[a-f0-9]{64}$/.test(draft.sourceSha256) ? draft.sourceSha256 : null;
   const typed = draft && draft.grid;
   state.manualGrid = typed && typeof typed === 'object' && typeof typed.audioName === 'string' && Number.isFinite(typed.duration) && typed.duration > 0 &&
     S.gridFromBPM(typed.bpm, typed.anchor, typed.duration) ? { bpm: typed.bpm, anchor: typed.anchor, audioName: typed.audioName, duration: typed.duration } : null;
@@ -1556,8 +1602,13 @@ async function start() {
       // The repository path, for "提交修改": decoded, and only plain names between the slashes.
       const path = decodeURIComponent(wanted.slice(1));
       const plainPath = path.split('/').every(part => part !== '' && part !== '.' && part !== '..' && !/[\\?#]/.test(part));
-      if (reply.ok) importCheer(new Uint8Array(await reply.arrayBuffer()), '社区库里的这份应援', { path: plainPath ? path : null });
-      else status('没能读取社区库里的这份应援。', true);
+      if (reply.ok) {
+        const bytes = new Uint8Array(await reply.arrayBuffer());
+        // Keep the revision actually opened, including after closing and restoring this draft.
+        const digest = crypto.subtle ? new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)) : null;
+        const sha256 = digest ? [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('') : null;
+        importCheer(bytes, '社区库里的这份应援', { path: plainPath ? path : null, sha256 });
+      } else status('没能读取社区库里的这份应援。', true);
     } catch { status('没能读取社区库里的这份应援。', true); }
   }
   check.flush();

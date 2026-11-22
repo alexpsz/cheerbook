@@ -688,3 +688,10 @@ test('malformed or oversized local handoffs never write, and clipboard denial yi
   assert.equal((await copyLocalDraft(tooLarge, noWrite)).errors[0].code, 'tooLarge');
   await assert.rejects(copyLocalDraft(draft, async () => { throw new Error('denied'); }), /denied/);
 });
+
+test('a public submitter survives export separately from the original authors', () => {
+  const bytes = fs.readFileSync(path.join(__dirname, '../spec/samples/valid/full-fields.cheer.json'));
+  const output = JSON.parse(serialize(cheer.parse(bytes).chart));
+  assert.deepEqual(output.submittedBy, { name: '合成投稿者', url: 'https://example.com/sender' });
+  assert.equal(output.credits.authors[0].name, '合成作者');
+});

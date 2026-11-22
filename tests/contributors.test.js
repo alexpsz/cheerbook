@@ -1,5 +1,5 @@
 'use strict';
-// contributors.json and the automatic merge of authors' own edits (C-011, lib/contributors.js),
+// contributors.json and automatic merge of new contributions (lib/contributors.js),
 // the record tool on throw-away git repositories, and the security properties of the two workflows
 // that use them. Synthetic accounts and files only: nothing here reads this repository's
 // contributors.json, cheers/ or mix/.
@@ -205,97 +205,40 @@ test('the pull request to merge is the single open one into the default branch f
 // The automatic merge decision
 
 const RECORDS = model({ [ONE]: FAN, [TWO]: OTHER, [MIX]: FAN }, SHA_B);
-const decide = (overrides = {}) => contributors.autoMergeDecision({
-  prAuthor: { id: FAN.id, login: 'fan-a-renamed' },
-  headOwner: { id: FAN.id, login: 'fan-a-renamed' },
-  files: [{ status: 'modified', filename: ONE }],
-  contributors: RECORDS,
-  draft: false,
-  headSha: SHA_A,
-  checkedSha: SHA_A,
-  changedFiles: overrides.files ? overrides.files.length : 1,
-  unrecordedPaths: [],
-  ...overrides,
+const decide = (files, overrides = {}) => contributors.autoMergeDecision({
+  changedFiles: files.length, files, draft: false, headSha: SHA_A, checkedSha: SHA_A,
+  baseSha: SHA_B, expectedBase: SHA_B, ...overrides,
 });
+const added = filename => ({ status: 'added', filename });
 
-test('an author\'s own edits and removals merge, matched by account id even after the login changed', () => {
-  const own = decide();
-  assert.equal(own.merge, true);
-  assert.match(own.reason, /自动合并/);
-  assert.equal(decide({ files: [{ status: 'removed', filename: ONE }, { status: 'modified', filename: MIX }] }).merge, true);
-  assert.equal(decide({ files: [{ status: 'removed', filename: MIX }] }).merge, true);
-  assert.equal(decide({ unrecordedPaths: [TWO] }).merge, true, 'only the files the pull request touches need current records');
-  const sameLogin = decide({ prAuthor: { id: 999, login: 'fan-a' }, headOwner: { id: 999, login: 'fan-a' } });
-  assert.equal(sameLogin.merge, false, 'a login alone proves nothing');
-  assert.match(sameLogin.reason, /另一个 GitHub 账号/);
-  // A branch in someone else's repository (a shared fork, an organisation) could hold their pushes.
-  const elsewhere = decide({ headOwner: { id: 999, login: 'org' } });
-  assert.equal(elsewhere.merge, false);
-  assert.match(elsewhere.reason, /自己的仓库/);
-  assert.equal(decide({ headOwner: null }).merge, false);
-});
-
-test('someone else\'s file, or own files together with someone else\'s, wait for review', () => {
-  assert.equal(decide({ files: [{ status: 'modified', filename: TWO }] }).merge, false);
-  assert.equal(decide({ files: [{ status: 'modified', filename: ONE }, { status: 'modified', filename: TWO }] }).merge, false);
-  assert.equal(decide({ files: [{ status: 'modified', filename: ONE }, { status: 'removed', filename: TWO }] }).merge, false);
-  assert.match(decide({ files: [{ status: 'removed', filename: TWO }] }).reason, /另一个 GitHub 账号/);
-});
-
-test('additions, renames, other change types and files outside the contribution folders wait for review', () => {
-  const added = decide({ files: [{ status: 'added', filename: 'cheers/合成组合/合成曲目/新的.cheer.json' }] });
-  assert.equal(added.merge, false);
-  assert.match(added.reason, /新增/);
-  assert.equal(decide({ files: [{ status: 'modified', filename: ONE }, { status: 'added', filename: 'cheers/合成组合/合成曲目/新的.cheer.json' }] }).merge, false);
-  const renamed = decide({ files: [{ status: 'renamed', filename: MOVED, previous_filename: ONE }] });
-  assert.equal(renamed.merge, false);
-  assert.match(renamed.reason, /改名/);
-  for (const status of ['changed', 'copied', 'unchanged', undefined]) assert.equal(decide({ files: [{ status, filename: ONE }] }).merge, false, String(status));
-  for (const filename of ['README.md', '.github/workflows/check.yml', 'lib/contributors.js', 'contributors.json', 'spec/mix-library.json', 'mix/proposals/口号.mix.json']) {
-    const outside = decide({ files: [{ status: 'modified', filename: ONE }, { status: 'modified', filename }] });
-    assert.equal(outside.merge, false, filename);
-    assert.match(outside.reason, /不是 cheers\/ 或 mix\/artists\/ 下的投稿文件/);
+test('all-new timelines and artist MIX qualify regardless of the human or app opening the PR', () => {
+  for (const files of [[added(ONE)], [added(MIX)], [added(ONE), added(MIX)]]) {
+    assert.equal(decide(files).merge, true);
   }
-  const unrecorded = decide({ files: [{ status: 'modified', filename: 'cheers/合成组合/合成曲目/没人认领.cheer.json' }] });
-  assert.equal(unrecorded.merge, false);
-  assert.match(unrecorded.reason, /没有投稿者记录/);
 });
 
-test('drafts, a stale commit, an empty or cut-short file list and records that are unreadable or behind wait for review', () => {
-  assert.match(decide({ draft: true }).reason, /草稿/);
-  assert.equal(decide({ draft: undefined }).merge, false);
-  assert.match(decide({ checkedSha: SHA_B }).reason, /不是 Pull Request 现在的最新提交/);
-  assert.equal(decide({ headSha: 'A'.repeat(40), checkedSha: 'A'.repeat(40) }).merge, false);
-  assert.equal(decide({ headSha: undefined, checkedSha: undefined }).merge, false);
-  assert.match(decide({ files: [] }).reason, /没有修改任何文件/);
-  assert.equal(decide({ files: undefined }).merge, false);
-  assert.match(decide({ changedFiles: 301 }).reason, /不完整/);
-  assert.equal(decide({ changedFiles: undefined }).merge, false);
-  assert.equal(decide({ changedFiles: null }).merge, false);
-  assert.match(decide({ contributors: { format: 'x' } }).reason, /投稿者记录无法读取/);
-  assert.equal(decide({ contributors: null }).merge, false);
-  assert.equal(decide({ contributors: model({}) }).merge, false);
-  // A file added or removed on main since the records were last brought up to date: the record
-  // may still belong to an earlier file at the same path.
-  assert.match(decide({ unrecordedPaths: [ONE] }).reason, /投稿者记录还没有更新/);
-  assert.match(decide({ unrecordedPaths: null }).reason, /无法确认投稿者记录是否已跟上/);
-  assert.equal(decide({ unrecordedPaths: undefined }).merge, false);
-  assert.equal(decide({ prAuthor: { id: '101', login: 'fan-a' } }).merge, false);
-  assert.equal(decide({ prAuthor: null }).merge, false);
-  assert.equal(decide({ files: [null] }).merge, false);
+test('edits, moves, removals, common MIX and mixed changes always require manual review', () => {
+  for (const change of [
+    ...['modified', 'renamed', 'removed', 'changed', 'copied', 'unchanged'].map(status => ({ status, filename: ONE })),
+    { ...added(MOVED), previous_filename: ONE }, added('mix/proposals/口号.mix.json'),
+    added('spec/mix-library.json'), added('index.json'), added('.github/workflows/check.yml'),
+    added('cheers/不分目录.cheer.json'), added('mix/artists/../口号.mix.json'),
+  ]) {
+    assert.equal(decide([change]).merge, false);
+    assert.equal(decide([added(TWO), change]).merge, false);
+  }
+});
+
+test('only a current, complete, unambiguous and non-draft change set qualifies', () => {
+  for (const overrides of [{ draft: true }, { draft: undefined }, { baseSha: undefined },
+    { expectedBase: SHA_A }, { headSha: SHA_B }, { changedFiles: 301 }, { files: undefined }]) {
+    assert.equal(decide([added(ONE)], overrides).merge, false);
+  }
+  assert.equal(decide([]).merge, false);
+  assert.equal(decide([added(ONE), added(ONE)]).merge, false);
   assert.equal(contributors.autoMergeDecision().merge, false);
 });
 
-test('file names from a pull request cannot break the log line they are reported in', () => {
-  const NEL = String.fromCharCode(0x85);
-  const SEPARATOR = String.fromCharCode(0x2028);
-  const { merge, reason } = decide({ files: [{ status: 'modified', filename: `cheers/a${LINE}::error::x${NEL}y${SEPARATOR}z.cheer.json` }] });
-  assert.equal(merge, false);
-  for (const breaking of [LINE, NEL, SEPARATOR]) assert.ok(!reason.includes(breaking));
-  assert.match(reason, /\\n::error::x\\u0085y\\u2028z/);
-});
-
-// ---------------------------------------------------------------------------------------------
 // tools/record-contributors.js on throw-away repositories
 
 const hasGit = spawnSync('git', ['--version']).status === 0;
@@ -597,12 +540,16 @@ function stepsOf(text) {
   });
 }
 
-const pins = text => [...text.matchAll(/uses: (\S+)/g)].map(found => found[1]);
+const pins = text => [...text.matchAll(/^\s*(?:- )?uses: (\S+)/gm)].map(found => found[1]);
 const expressions = text => [...text.matchAll(/\$\{\{\s*(.*?)\s*\}\}/g)].map(found => found[1]);
 const jobPermissions = text => /^ {4}permissions:\n((?: {6}\S.*\n)+)/m.exec(text)[1].trim().split('\n').map(line => line.trim()).sort();
 
 test('"检查" is the workflow that auto-merge waits for', () => {
-  assert.match(workflow('check.yml'), /^name: 检查$/m);
+  const check = workflow('check.yml');
+  assert.match(check, /^name: 检查$/m);
+  assert.match(check, /working-directory: base\n        run: node --test/);
+  assert.match(check, /npm ci --prefix base\/worker --ignore-scripts/);
+  assert.doesNotMatch(check, /working-directory: target|npm ci --prefix target/);
 });
 
 test('auto-merge runs only after "检查" passes on a pull request and never runs the pull request\'s code', () => {
@@ -611,7 +558,7 @@ test('auto-merge runs only after "检查" passes on a pull request and never run
   assert.equal(triggers, '\non:\n  workflow_run:\n    workflows: [检查]\n    types: [completed]\n');
   assert.doesNotMatch(text, /pull_request_target/);
   assert.match(text, /^permissions: \{\}$/m);
-  assert.deepEqual(jobPermissions(text), ['actions: write', 'contents: write', 'pull-requests: write']);
+  assert.deepEqual(jobPermissions(text), ['actions: write', 'contents: write', 'pull-requests: write', 'statuses: read']);
   for (const condition of ["github.event.workflow_run.conclusion == 'success'", "github.event.workflow_run.event == 'pull_request'",
     "github.event.workflow_run.path == '.github/workflows/check.yml'"]) {
     assert.ok(text.includes(condition), condition);
@@ -634,12 +581,14 @@ test('auto-merge runs only after "检查" passes on a pull request and never run
     if (token) assert.doesNotMatch(step.run, /\bnode\b|require\(/, step.name);
     if (step.shell === 'node {0}' || /\bnode\b/.test(step.run)) assert.equal(token, false, step.name);
   }
-  assert.ok(steps.some(step => step.run && step.run.includes('tools/record-contributors.js --after HEAD --pending')));
-  const merge = steps.find(step => step.run && step.run.includes('/merge'));
+  assert.ok(steps.some(step => step.run && step.run.includes('node tools/check-merge-tree.js') && step.run.includes('node tools/check.js')));
+  const merge = steps.find(step => step.run && step.run.includes('gh api --method PUT'));
   assert.match(merge.run, /--method PUT "repos\/\$GITHUB_REPOSITORY\/pulls\/\$NUMBER\/merge" -f merge_method=squash -f sha="\$CHECKED_SHA"/);
+  assert.match(merge.run, /cheerbook\/review-policy/);
+  assert.match(merge.run, /for attempt in \{1\.\.24\}/);
   assert.match(merge.text, /if: steps\.decide\.outputs\.merge == 'true'/);
   const files = steps.find(step => step.run && step.run.includes('/compare/'));
-  assert.match(files.run, /compare\/\$DEFAULT_BRANCH\.\.\.\$CHECKED_SHA/, 'the files are listed for exactly the checked commit');
+  assert.match(files.run, /compare\/\$BASE\.\.\.\$CHECKED_SHA/, 'the files are listed for exactly the checked commit');
 });
 
 test('both workflows pin their actions to the commits check.yml uses and keep no token in the checkout', () => {
@@ -727,34 +676,92 @@ test('auto-merge finds the pull request by the checked commit, repository and br
   assert.equal(runStep('找到检查对应的 Pull Request', { files: { 'open.json': open }, event: {} }).output, '', 'no run, no match');
 });
 
-test('auto-merge decides from the default branch\'s records and the files of the checked commit', () => {
-  const records = contributors.serializeContributors(model({ [ONE]: FAN, [TWO]: OTHER }, SHA_B));
-  const pull = { number: 5, state: 'open', draft: false, base: { ref: 'main' }, head: { sha: SHA_A, repo: { owner: { id: FAN.id } } }, user: { id: FAN.id, login: 'fan-a-renamed' }, changed_files: 1 };
+test('the decision step pins head and base, allows app submissions and refuses stale, mixed and partial comparisons', () => {
+  const pull = { number: 5, state: 'open', draft: false, base: { ref: 'main', sha: SHA_B },
+    head: { sha: SHA_A }, user: { id: 123, login: 'example[bot]' }, changed_files: 1 };
   const decideStep = (overrides = {}) => runStep('判断能否自动合并', {
-    records: 'records' in overrides ? overrides.records : records,
     files: {
       'pull.json': { ...pull, ...overrides.pull },
-      'compare.json': overrides.compare || { files: [{ status: 'modified', filename: ONE }] },
-      'pending.json': 'pending' in overrides ? overrides.pending : '[]',
+      'compare.json': overrides.compare || { files: [added(ONE)] },
+      'base.txt': SHA_B,
     },
     env: { NUMBER: '5' },
   });
-  const own = decideStep();
-  assert.equal(own.output, 'merge=true\n');
-  assert.match(own.stdout, /^Pull Request #5：.*自动合并/);
-  assert.equal(decideStep({ compare: { files: [{ status: 'modified', filename: TWO }] } }).output, 'merge=false\n');
-  assert.equal(decideStep({ records: undefined }).output, 'merge=false\n');
-  assert.equal(decideStep({ records: '{' }).output, 'merge=false\n');
-  assert.equal(decideStep({ pending: 'null' }).output, 'merge=false\n');
-  assert.equal(decideStep({ pending: JSON.stringify([ONE]) }).output, 'merge=false\n');
-  assert.equal(decideStep({ pending: '' }).output, 'merge=false\n');
-  assert.equal(decideStep({ pull: { state: 'closed' } }).output, 'merge=false\n');
-  assert.equal(decideStep({ pull: { base: { ref: 'other' } } }).output, 'merge=false\n');
-  assert.equal(decideStep({ pull: { number: 6 } }).output, 'merge=false\n');
-  assert.equal(decideStep({ pull: { head: { sha: SHA_B, repo: { owner: { id: FAN.id } } } } }).output, 'merge=false\n');
-  assert.equal(decideStep({ pull: { head: { sha: SHA_A } } }).output, 'merge=false\n', 'no head repository, no merge');
-  assert.equal(decideStep({ pull: { head: { sha: SHA_A, repo: { owner: { id: 999 } } } } }).output, 'merge=false\n');
-  assert.equal(decideStep({ pull: { draft: true } }).output, 'merge=false\n');
-  assert.equal(decideStep({ pull: { changed_files: 2 } }).output, 'merge=false\n');
-  assert.equal(decideStep({ compare: 'not json' }).output, 'merge=false\n');
+  assert.equal(decideStep().output, 'merge=true\n');
+  for (const overrides of [
+    { compare: { files: [{ status: 'modified', filename: ONE }] } },
+    { compare: { files: [added('spec/mix-library.json')] } }, { compare: 'not json' },
+    { pull: { state: 'closed' } }, { pull: { base: { ref: 'other', sha: SHA_B } } },
+    { pull: { base: { ref: 'main', sha: SHA_A } } }, { pull: { number: 6 } },
+    { pull: { head: { sha: SHA_B } } }, { pull: { draft: true } }, { pull: { changed_files: 2 } },
+  ]) assert.equal(decideStep(overrides).output, 'merge=false\n');
+});
+
+test('app-submitted contributions never acquire the app or the merging maintainer as their human author', { skip: !hasGit }, () => {
+  const { root, commit } = repository();
+  const c0 = commit('start', { 'README.md': 'example' });
+  const c1 = commit('app contribution', { [ONE]: content('one') });
+  const pulls = merged(1, c1, { id: 202, login: 'synthetic[bot]', type: 'Bot' });
+  pulls[0].head.repo.owner.id = MAINTAINER.id;
+  const run = record(root, '--before', c0, '--after', c1, '--pulls', pullsFor({ [c1]: pulls }), ...actor);
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(readRecords(root).files, {});
+});
+
+test('the synthetic merge must match both commits and add exactly the verified regular blobs', { skip: !hasGit }, () => {
+  const { verifyMergeTree } = require('../tools/check-merge-tree');
+  const { root, git, commit } = repository();
+  const base = commit('base', { 'README.md': 'example' });
+  git('checkout', '-qb', 'submit');
+  const head = commit('submit', { [ONE]: content('one') });
+  const file = { ...added(ONE), sha: git('rev-parse', head + ':' + ONE) };
+  const tree = git('rev-parse', head + '^{tree}');
+  const merge = git('commit-tree', tree, '-p', base, '-p', head, '-m', 'synthetic merge');
+  git('checkout', '-q', 'main');
+  git('fetch', '-q', '.', merge);
+  assert.equal(verifyMergeTree(head, [file], root), merge);
+  assert.throws(() => verifyMergeTree(SHA_B, [file], root));
+  assert.throws(() => verifyMergeTree(head, [{ ...file, sha: SHA_A }], root));
+  assert.throws(() => verifyMergeTree(head, [file, file], root));
+  git('checkout', '-q', 'submit');
+  git('update-index', '--chmod=+x', ONE);
+  const mode = git('write-tree');
+  git('fetch', '-q', '.', git('commit-tree', mode, '-p', base, '-p', head, '-m', 'wrong mode'));
+  git('restore', '--staged', '--', ONE);
+  git('checkout', '-q', 'main');
+  assert.throws(() => verifyMergeTree(head, [file], root));
+});
+
+test('the required review status binds real human approvals to this PR head and every affected path', () => {
+  const { matchingApprovals, policy } = require('../tools/review-policy');
+  const comment = (id, head = SHA_A, type = 'User') => ({
+    author: { databaseId: id, __typename: type }, body: '/cheerbook approve ' + head, lastEditedAt: null, isMinimized: false,
+  });
+  const approvals = matchingApprovals([comment(FAN.id), comment(OTHER.id, SHA_B), comment(77, SHA_A, 'Bot'),
+    { ...comment(88), lastEditedAt: 't1' }, { ...comment(89), isMinimized: true }, { ...comment(99), body: 'quoted /cheerbook approve ' + SHA_A }], SHA_A);
+  assert.deepEqual([...approvals], [FAN.id]);
+  const approve = (files, overrides = {}) => policy({
+    pull: { changed_files: files.length, draft: false, base: { ref: 'main', sha: SHA_B }, head: { sha: SHA_A } },
+    files, base: SHA_B, owners: model({ [ONE]: FAN, [TWO]: OTHER }), pending: [], approvals,
+    maintainer: MAINTAINER.id, ...overrides,
+  });
+  const edit = filename => ({ filename, status: 'modified' });
+  assert.ok(approve([added(ONE)], { approvals: new Set() }));
+  assert.ok(approve([edit(ONE)]));
+  assert.equal(approve([edit(ONE)], { pending: [ONE] }), false);
+  assert.equal(approve([edit(ONE), edit(TWO)]), false);
+  assert.ok(approve([edit(ONE), edit(TWO)], { approvals: new Set([FAN.id, OTHER.id]) }));
+  assert.equal(approve([edit(MOVED)]), false);
+  assert.equal(approve([added('mix/proposals/test.mix.json')]), false);
+  assert.ok(approve([added('mix/proposals/test.mix.json')], { approvals: new Set([MAINTAINER.id]) }));
+  assert.ok(approve([edit(MOVED)], { approvals: new Set([MAINTAINER.id]) }));
+  assert.equal(approve([edit(ONE)], { base: SHA_A }), false);
+  const reviewWorkflow = workflow('review-policy.yml');
+  assert.match(reviewWorkflow, /ref: main/);
+  assert.doesNotMatch(reviewWorkflow, /contents: write|pull-requests: write|pull_request\.head/);
+  for (const step of stepsOf(reviewWorkflow)) if (step.run) assert.doesNotMatch(step.run, /\$\{\{/);
+  assert.match(reviewWorkflow, /statuses: write/);
+  for (const name of ['auto-merge.yml', 'index.yml']) {
+    assert.match(workflow(name), /group: cheerbook-main-writers\n\s+queue: max/);
+  }
 });

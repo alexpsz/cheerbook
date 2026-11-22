@@ -96,7 +96,7 @@ ${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</spa
 </ul></div>`).join('\n')}`;
   const body = `<div class="hero">
 <h1>偶像歌曲的应援本，大家一起写。</h1>
-<p>什么时候喊 MIX、喊 call，哪位成员在唱，什么时候举灯——CheerBook 把这些按秒记在 <code>.cheer.json</code> 文件里。社区投稿、维护者审核，大家都可以按各文件的许可下载使用。文件只有时间轴，不含歌词。</p>
+<p>什么时候喊 MIX、喊 call，哪位成员在唱，什么时候举灯——CheerBook 把这些按秒记在 <code>.cheer.json</code> 文件里。社区通过 Pull Request 收录，大家都可以按各文件的许可下载使用。文件只有时间轴，不含歌词。</p>
 <ul class="stats" aria-label="收录情况">
 <li><strong>${entries.length}</strong><span>份应援</span></li>
 <li><strong>${songCount}</strong><span>首歌</span></li>
@@ -112,12 +112,12 @@ ${browse}
 <div class="grid">
 <div class="card"><h3>在网页上</h3><ol class="steps"><li>打开<a href="/editor/">制作应援</a>，选择本地音频。</li><li>加载歌词，按住成员按钮或数字键边听边点，或从通用 MIX 一点插入。</li><li>保存到本机，或直接投稿到 CheerBook。</li></ol></div>
 <div class="card"><h3>在映场中</h3><ol class="steps"><li>点应援文件旁的“在映场中打开”，在支持社区应援的版本中预览并确认导入。</li><li>使用较早版本时，可以下载文件，在<a href="${LIVEGLOW}">映场</a>“正在播放”侧栏的“应援”标签点“导入…”。</li><li>播放到匹配的录音时，MIX 与 call 会跟着歌词出现。</li></ol></div>
-<div class="card"><h3>投稿</h3><p>只收自己听写打轴、或有开放许可 / 原作者同意的时间轴，不能有歌词原文。按<a href="${REPO}/blob/main/CONTRIBUTING.md">投稿指南</a>在 GitHub 上发起 Pull Request，检查会自动运行。</p></div>
+<div class="card"><h3>投稿</h3><p>只收自己听写打轴、或有开放许可 / 原作者同意的时间轴，不能有歌词原文。在<a href="/editor/">制作页</a>选择免账号投稿，送出后可凭链接查看进度。也可以按<a href="${REPO}/blob/main/CONTRIBUTING.md">投稿指南</a>自行在 GitHub 提交。</p></div>
 <div class="card"><h3>MIX</h3><p><a href="/mix/">MIX 页</a>收录通用 MIX 与各位艺人的专属 MIX。你可以<a href="/editor/mix/?type=proposal">提议通用 MIX</a>，审核后并入内置库；也可以<a href="/editor/mix/?type=artist">投稿艺人专属 MIX</a>，制作这位艺人的歌时就能一点插入。</p></div>
 <div class="card"><h3>给开发者</h3><p>格式说明见 <a href="${REPO}/blob/main/spec/README.md">spec/README.md</a>；机器可读的 <a href="/index.json">index.json</a>、<a href="/spec/cheer.schema.json">JSON Schema</a>、<a href="/spec/mix-library.json">MIX 库</a>与<a href="/mix/artists.json">艺人专属 MIX</a>都可以直接获取。</p></div>
 </div>
 </section>`;
-  return layout({ title: 'CheerBook 应援本 · 偶像歌曲应援时间轴', description: '偶像歌曲应援 / MIX 时间轴的社区库：社区投稿、维护者审核、自由下载，文件不含歌词。', current: 'home', body });
+  return layout({ title: 'CheerBook 应援本 · 偶像歌曲应援时间轴', description: '偶像歌曲应援 / MIX 时间轴的社区库：支持免账号投稿、按许可下载，文件不含歌词。', current: 'home', body });
 }
 
 function artistMixSection(mixRecords) {
@@ -163,7 +163,7 @@ ${entry.readingNote ? `<dt>读音</dt><dd>${escapeHTML(entry.readingNote)}</dd>`
   const body = `<div class="hero">
 <h1>MIX</h1>
 <p>通用 MIX 是偶像现场通用的 MIX 与 call，按“${escapeHTML(library.credit)}”署名，以 CC0 公开，只收在多个相互独立的公开来源中核对为通用的口号；映场内置同一份库。艺人专属 MIX 是某个组合或某首歌自己的口号，由社区投稿、按各自的许可公开。<code>{name}</code> 处填入成员名字。</p>
-<p class="cta"><a class="button" href="/editor/mix/?type=proposal">提议通用 MIX</a><a class="button" href="/editor/mix/?type=artist">投稿艺人专属 MIX</a><span class="meta">填写口号与读音，检查通过后一键打开 GitHub 投稿，维护者审核后上线。</span></p>
+<p class="cta"><a class="button" href="/editor/mix/?type=proposal">提议通用 MIX</a><a class="button" href="/editor/mix/?type=artist">投稿艺人专属 MIX</a><span class="meta">填写口号与读音后在 GitHub 投稿。通用 MIX 一律人工审核；新增艺人专属 MIX 通过检查后自动收录。</span></p>
 <p class="meta">跳到：<a href="#builtin">通用 MIX（${library.entries.length}）</a> · <a href="#artists">艺人专属 MIX（${mixRecords.length}）</a></p>
 </div>
 <section aria-labelledby="builtin"><h2 id="builtin">通用 MIX</h2>
@@ -240,6 +240,8 @@ export default lib;
 // The editor also plays the chosen audio file (blob: URLs), analyses it in a worker of this site,
 // reads this site's own data, and, only when the visitor asks, looks lyrics up on lrclib.net.
 const EDITOR_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src blob:; worker-src 'self'; connect-src 'self' https://lrclib.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+// Only the chart editor embeds the opt-in Turnstile script and frame. Its API stays same-origin.
+const SUBMISSION_CSP = EDITOR_CSP.replace("script-src 'self';", "script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com;");
 const HEADERS = `/*
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
@@ -263,9 +265,21 @@ const HEADERS = `/*
 /spec/*
   Access-Control-Allow-Origin: *
 
-/editor/*
+/editor/mix/
   ! Content-Security-Policy
   Content-Security-Policy: ${EDITOR_CSP}
+
+/editor/mix/index.html
+  ! Content-Security-Policy
+  Content-Security-Policy: ${EDITOR_CSP}
+
+/editor/
+  ! Content-Security-Policy
+  Content-Security-Policy: ${SUBMISSION_CSP}
+
+/editor/index.html
+  ! Content-Security-Policy
+  Content-Security-Policy: ${SUBMISSION_CSP}
 `;
 
 /** Writes the site into `output`, which must be missing, empty or an earlier build of this tool. */

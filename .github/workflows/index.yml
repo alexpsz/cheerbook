@@ -26,8 +26,8 @@ on:
 permissions: {}
 
 concurrency:
-  group: index
-  cancel-in-progress: false
+  group: cheerbook-main-writers
+  queue: max
 
 jobs:
   index:

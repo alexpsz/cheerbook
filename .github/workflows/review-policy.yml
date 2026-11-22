@@ -1,0 +1,40 @@
+# Uses only code from main and GitHub API data. Never checks out the PR, imports its
+# modules or treats its comments/paths as shell strings. Publish the decision on its head SHA.
+name: 投稿审核
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
+  issue_comment:
+    types: [created, edited, deleted]
+permissions: {}
+jobs:
+  policy:
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.issue.pull_request &&
+        (startsWith(github.event.comment.body, '/cheerbook approve ') ||
+         startsWith(github.event.changes.body.from, '/cheerbook approve ')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cheerbook-review-${{ github.event.pull_request.number || github.event.issue.number }}
+      queue: max
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: 核对最新提交的人工批准
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/review-policy.js

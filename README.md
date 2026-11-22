@@ -2,10 +2,10 @@
 
 网站：<https://cheerbook.kozueginko.com>
 
-CheerBook 是偶像歌曲应援 / MIX 时间轴的社区库：什么时候喊 MIX、喊 call、哪位成员在唱、什么时候举灯，按秒记在一个 `.cheer.json` 文件里，大家投稿、维护者审核，任何人都可以下载使用。
+CheerBook 是偶像歌曲应援 / MIX 时间轴的社区库：什么时候喊 MIX、喊 call、哪位成员在唱、什么时候举灯，按秒记在一个 `.cheer.json` 文件里，大家通过 PR 投稿，任何人都可以下载使用。
 
 - **只有时间轴，不含歌词**：文件里只有时间、口号、成员与署名，唱词由播放端从自己的歌词来源显示。
-- **不需要账号和服务器**：投稿走 GitHub 的 Pull Request，自动检查格式，维护者人工审核后合并；作者之后修改自己的文件，检查通过即自动合并。
+- **可免 GitHub 账号投稿**：网页表单由机器人代开 Pull Request，返回公开进度链接。只新增应援或专属 MIX 的普通 PR 通过检查后可自动入库；改动已有文件和通用 MIX 需人工审核。
 - **格式公开**：`.cheer.json` 的格式说明、JSON Schema 与对照样例在 [`spec/`](./spec/)，以 CC0 公开，任何播放器或工具都可以实现。
 
 CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯片 Mac 上的音乐与视觉播放器）由同一位维护者发起，映场可以读取和制作这种文件；CheerBook 本身是独立项目，不隶属于任何偶像组合、事务所或音乐平台。
@@ -25,7 +25,7 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 2. **加载歌词**：粘贴或导入 LRC，或点“在线查找”从 [LRCLIB](https://lrclib.net) 查询（只发送歌名、艺人和时长）。歌词只用来对时间，不会写进应援文件。
 3. **边听边点**：按住成员按钮或数字键 1–9 记录演唱段落，M / C / N 记录 MIX、call、提示；右侧的通用 MIX 一点就插入并对齐到拍子；“✦ 推荐”会按歌词空位和节拍推荐 MIX，点了才会采纳。
 4. **即时反馈**：每一下都会马上出现在歌词旁边，底部的应援带像播放时一样显示当前和下一条；格式问题和与歌词重合的文字在侧栏实时提示。
-5. **保存与投稿**：草稿自动保存在这个浏览器里；“保存到本机”下载 `.cheer.json`，“分享 / 投稿”会打开 GitHub 的新建文件页面，内容已经填好。
+5. **保存与投稿**：草稿自动保存在这个浏览器里；“保存到本机”下载 `.cheer.json`，“分享 / 投稿”可免账号提交，也保留自行提 GitHub PR 的入口。
 
 网站上每份应援都有“在网页中播放”：选择你自己的音频文件，就能看着应援带跟着唱。从网站打开的应援改好后，“分享 / 投稿”可以直接提交对原文件的修改。
 
@@ -40,13 +40,13 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 
 ## 隐私
 
-网站不设访问统计，不加载其他网站的资源。网页编辑器里选择的音频只在你的浏览器里播放和分析，不会上传；草稿保存在这个浏览器的本地存储里。只有点“在线查找”时，才会把歌名、艺人和时长发送给 LRCLIB。
+网站不设访问统计。免账号投稿会加载 Cloudflare Turnstile，并由服务端使用来源 IP 限流。网页编辑器里选择的音频只在你的浏览器里播放和分析，不会上传；草稿保存在这个浏览器的本地存储里。在线查找歌词、或确认提交需要校对歌词的文件时，使用录音元数据向 LRCLIB 查询。投稿的昵称与自愿填写的公开联系方式会出现在文件及公开 PR 中。
 
 ## 投稿
 
 先读[投稿指南](./CONTRIBUTING.md)。要点：
 
-- 新投稿由维护者审核后公开。投稿合并后，投稿用的 GitHub 账号记为作者：之后作者修改或删除自己投稿的文件，检查通过就自动合并上线；别人的修改要审核。
+- 新增应援及艺人专属 MIX 检查通过可自动合并。改动已有文件和所有通用 MIX 均需人工合并。
 
 - 只收**自己听写打轴**的文件，或来源有明确开放许可、原作者同意转载的文件；从别人的 call 表或视频整理的时间轴不收。
 - 文件里**不能有歌词原文**；跟唱的那一句用“跟唱”（`echo`）标记。
@@ -64,7 +64,7 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 | [`cheers/`](./cheers/) | 社区投稿的应援文件：`cheers/<艺人>/<歌名>/<文件名>.cheer.json` |
 | [`mix/`](./mix/) | MIX 投稿：通用 MIX 提议（`mix/proposals/`，合并后并入内置库）与艺人专属 MIX（`mix/artists/<艺人>/`） |
 | [`index.json`](./index.json) | 全部收录的应援文件与艺人专属 MIX 的索引（合并后自动生成） |
-| [`contributors.json`](./contributors.json) | 每份投稿的作者 GitHub 账号（合并后自动记录，用于判断作者修改） |
+| [`contributors.json`](./contributors.json) | 可核实的 GitHub 投稿账号（供人工审核原作者修改；免账号代投稿不登记机器人的身份） |
 | [`spec/`](./spec/) | 格式说明、JSON Schema、对照样例与内置 MIX 库 |
 | [`lib/`](./lib/)、[`tools/`](./tools/)、[`tests/`](./tests/) | 读取器、自动检查与网站生成（Node.js，无依赖） |
 | [`site/`](./site/) | 网站的样式、脚本与图标；[`site/editor/`](./site/editor/) 是网页编辑器与 MIX 表单 |
@@ -73,16 +73,19 @@ CheerBook 与 [映场 Liveglow](https://github.com/alexpsz/liveglow)（Apple 芯
 在本地运行检查（需要 Node.js 22 或更新版本）：
 
 ```sh
+npm ci --prefix worker --ignore-scripts  # 服务器使用的 JSON Schema 校验器
 npm test          # 读取器对照 spec/ 的样例、社区规则与网站生成的测试
 npm run check     # 检查 cheers/、mix/ 下的全部文件与 MIX 库
 npm run site      # 生成网站到 _site/
 ```
 
+投稿服务的 GitHub App、Turnstile、Worker 路由配置与测试见[维护者部署指南](./docs/submission-service.md)。
+
 ## 路线
 
 1. **社区库**（现在）：格式说明、投稿与审核、自动检查、索引。
 2. **映场接入**（计划中）：在映场里按正在播放的歌浏览、下载社区应援。
-3. **网页编辑器**（已上线第一版）：在浏览器里选择本机音频、分析节拍并打轴，不上传音频，让没有 Mac 的人也能制作和投稿；MIX 提议与艺人专属 MIX 的投稿、作者自改自动上线。以后加入 Mineradio 舞台作背景。
+3. **网页编辑器**（已上线第一版）：在浏览器里选择本机音频、分析节拍并打轴，不上传音频，让没有 Mac 的人也能制作和投稿；MIX 提议与艺人专属 MIX 的投稿、免账号提交应援文件。以后加入 Mineradio 舞台作背景。
 
 ## 许可
 

@@ -9,6 +9,7 @@
     "isrc": "xx-ab1-26-00001",
     "appleMusicID": "1234567890"
   },
+  "submittedBy": { "name": "合成投稿者", "url": "https://example.com/sender" },
   "offset": 0.5,
   "members": [{ "id": "a", "name": "成员甲", "color": "#E4007F" }, { "id": "b", "name": "成员乙", "color": "#00a0e9" }],
   "events": [

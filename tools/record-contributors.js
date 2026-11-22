@@ -167,7 +167,11 @@ function main(argv) {
     if (values.pulls !== undefined) {
       const file = path.join(values.pulls, sha + '.json');
       if (!fs.existsSync(file)) throw new Error(`缺少提交 ${short(sha)} 的 Pull Request 信息（${file}）。`);
-      const found = contributors.mergedPullRequest(sha, JSON.parse(fs.readFileSync(file, 'utf8')), values.branch);
+      const pulls = JSON.parse(fs.readFileSync(file, 'utf8'));
+      // A submitting app represents many people. Never fall back to the maintainer who merged it.
+      if (Array.isArray(pulls) && pulls.some(pr => pr?.merged_at && pr.merge_commit_sha === sha &&
+        pr.base?.ref === values.branch && (pr.user?.type === 'Bot' || pr.user?.login?.endsWith('[bot]')))) return null;
+      const found = contributors.mergedPullRequest(sha, pulls, values.branch);
       if (found) return { user: found.user, via: `Pull Request #${found.number}` };
     }
     if (!pushed.has(sha)) return null;

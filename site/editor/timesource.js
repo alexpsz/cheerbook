@@ -53,8 +53,11 @@ export function createTransport(audio, { now = () => performance.now() / 1000, s
     /** The audio element is loaded: it is the time from here on. The silent clock stops. */
     useAudio() {
       const wasPlaying = kind === 'silent' && silent.startedAt !== null;
+      const from = kind === 'silent' ? silentPosition() : null;
       hold();
       kind = 'audio';
+      // The audio picks up where the silent clock was, when that is inside the file.
+      if (from !== null && from > 0 && Number.isFinite(audio.duration) && from < audio.duration) audio.currentTime = from;
       if (wasPlaying) emit('pause');
     },
     /**
@@ -65,14 +68,17 @@ export function createTransport(audio, { now = () => performance.now() / 1000, s
     useSilent(duration) {
       const length = Number.isFinite(duration) && duration > 0 ? duration : 0;
       const from = kind === 'audio' ? audio.currentTime || 0 : silentPosition();
-      if (kind === 'audio' && !audio.paused) audio.pause();
+      // The audio element reports its pause later, when it is no longer the source and is not
+      // listened to; so the pause is announced here.
+      const audioWasPlaying = kind === 'audio' && !audio.paused;
+      if (audioWasPlaying) audio.pause();
       const wasPlaying = kind === 'silent' && silent.startedAt !== null;
       kind = 'silent';
       silent.duration = length;
       silent.base = Math.min(Math.max(0, from), length);
       silent.startedAt = wasPlaying && silent.base < length ? now() : null;
       arm();
-      if (wasPlaying && silent.startedAt === null) emit('pause');
+      if (audioWasPlaying || (wasPlaying && silent.startedAt === null)) emit('pause');
     },
 
     /** Resolves once playing; rejects as the audio element does when the browser refuses. */

@@ -6,7 +6,7 @@
     <label class="ed-field"><span>歌名</span><input id="song-title" autocomplete="off" maxlength="200" placeholder="选择音频时自动填入，也可以自己填"></label>
     <label class="ed-field"><span>艺人</span><input id="song-artist" autocomplete="off" maxlength="200"></label>
     <label class="ed-field duration"><span>时长</span><input id="song-duration" autocomplete="off" inputmode="numeric" maxlength="12" placeholder="如 3:45" aria-describedby="song-duration-note"></label>
-    <span id="song-duration-note" class="visually-hidden">歌曲时长，按 分:秒 填写。选择本地音频后由音频决定。</span>
+    <span id="song-duration-note" class="visually-hidden">歌曲时长，按 分:秒 填写。选择了本地音频时不能在这里改。</span>
   </div>
   <div class="ed-actions" role="toolbar" aria-label="操作">
     <button type="button" id="pick-audio" class="primary">选择本地音频</button>
@@ -194,7 +194,7 @@
     <label class="ed-field"><span>作者名（可以用昵称）</span><input id="share-author" maxlength="64" autocomplete="nickname"></label>
     <fieldset class="ed-choice">
       <legend>这份应援是</legend>
-      <label><input type="radio" name="origin" value="self" checked> 自己边听边点的</label>
+      <label><input type="radio" name="origin" value="self" checked> 自己做的</label>
       <label><input type="radio" name="origin" value="referenced"> 参考了别人的版本</label>
     </fieldset>
     <div id="share-referenced" hidden>

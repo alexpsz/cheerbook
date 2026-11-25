@@ -61,9 +61,10 @@ const state = {
   // Whether this cheer has been edited against real audio; a cheer made on the silent clock alone
   // is reminded to say so in its note. Unknown for a file opened from elsewhere (counts as true).
   heard: false,
-  // The timeline row whose "add here" actions are open, as `kind:start`.
+  // The timeline row whose "add here" actions are open, as `kind:start`; and the row to give focus back to after a rebuild.
   adding: null,
-  // Taps counted on the wall clock (no playback), and the metronome's audio context.
+  refocus: null,
+  // Whether the taps being counted are timed on the wall clock (no playback) rather than on the song.
   wallTaps: false,
   // 'community' after "在网页中播放": a bar saying there is no sound, until audio is chosen or it is closed.
   notice: null,
@@ -199,7 +200,8 @@ async function loadAudio(file) {
   });
   if (!meta) {
     status('这个文件无法在浏览器里播放。请换成 MP3、AAC / M4A、FLAC、WAV 或 Ogg 文件。', true);
-    if (!hasAudio()) dropAudio({ quiet: true });
+    // The element now points at a file it cannot play, whatever it played before.
+    dropAudio({ quiet: true });
     return;
   }
   transport.useAudio();
@@ -240,6 +242,11 @@ function dropAudio({ quiet = false } = {}) {
   state.autoGrid = null;
   audio.removeAttribute('src');
   audio.load();
+  // A beat already found stays (it is this song's); an analysis cut short is no longer "正在分析…".
+  const kept = state.grid;
+  setGrid(kept, !kept ? '' : kept.source === 'beatMap' ? `节拍：${Math.round(kept.bpm)} BPM · 自动分析` : handNote(kept));
+  state.taps = null;
+  syncTapButton();
   syncSource();
   frame(true);
   if (!quiet) status('已切回无声计时：页面自己计时，没有声音。', true);
@@ -280,14 +287,23 @@ function setMode(watching) {
   $('toggle-mode').setAttribute('aria-pressed', String(watching));
   $('toggle-mode').textContent = watching ? '回到编辑' : '观看模式';
   state.adding = null;
+  if (watching && state.selected !== null) { state.selected = null; renderSelected(); }
+  // Its switch is not shown while watching, so it does not keep ticking there.
+  if (watching && click.on) { click.enable(false); $('metronome').checked = false; }
   renderTimeline();
 }
 
 // 节拍提示音: a tick on each beat of the grid while the clock runs, so a tempo typed or tapped
 // without audio can be checked by ear. It is synthesised here; nothing is loaded.
 const click = {
-  on: false, context: null, next: null,
-  reset() { this.next = null; },
+  on: false, context: null, next: null, pending: [],
+  /** Forgets where it was and silences the ticks already handed over (a seek, a pause, a new rate or grid). */
+  reset() {
+    this.next = null;
+    const now = this.context ? this.context.currentTime : 0;
+    for (const { osc, when } of this.pending) if (when > now) { try { osc.stop(); } catch { /* already stopped */ } }
+    this.pending = [];
+  },
   enable(on) {
     this.on = on;
     const Context = window.AudioContext || window.webkitAudioContext;
@@ -315,7 +331,9 @@ const click = {
       osc.connect(gain).connect(context.destination);
       osc.start(when);
       osc.stop(when + 0.08);
+      this.pending.push({ osc, when });
     }
+    if (this.pending.length > 16) this.pending = this.pending.filter(tick => tick.when > context.currentTime - 0.1);
     this.next = index;
   },
 };
@@ -496,7 +514,6 @@ function seek(to) {
   if (!transport.ready) return;
   follow.manualAt = -Infinity;
   transport.seek(Math.min(Math.max(0, to), duration()));
-  click.reset();
   frame(true);
 }
 
@@ -691,6 +708,9 @@ function buildRows() {
     for (const gap of S.gaps(state.lyrics, duration(), state.grid)) {
       const next = lines.findIndex(line => line.start >= gap.end - 0.05);
       const row = gapRow(next === -1 ? lines.length : next);
+      // A row that already holds cheers keeps its own times; the first stretch names an empty one.
+      if (row.events.length || row.ghosts.length || row.named) continue;
+      row.named = true;
       row.start = gap.start;
       row.end = gap.end;
     }
@@ -726,7 +746,7 @@ function renderTimeline() {
       ? h('div', { class: 'body' }, lineText(row.line), tags, actions)
       : h('div', { class: 'body' }, row.kind === 'gap' ? h('div', { class: 'text' }, gapLabel(row)) : null, tags, actions);
     const add = canAdd ? h('button', { type: 'button', class: 'row-add', 'aria-expanded': String(open), 'aria-label': '在这里添加应援', title: '在这里添加',
-      onclick: event => { event.stopPropagation(); state.adding = open ? null : addKey; renderTimeline(); } }, '＋') : null;
+      onclick: event => { event.stopPropagation(); state.adding = open ? null : addKey; state.refocus = addKey; renderTimeline(); } }, '＋') : null;
     const bars = h('span', { class: 'singers', 'aria-hidden': 'true' },
       (row.kind === 'line' ? singers.get(row.lineIndex) || [] : []).map(color => h('i', { style: { '--member': color } })));
     const label = row.kind === 'line' ? `${formatTime(row.start)} ${row.line.text}` : gapLabel(row);
@@ -735,6 +755,14 @@ function renderTimeline() {
     h('span', { class: 'time' }, formatTime(row.start)), bars, body, add));
   });
   if (box) box.scrollTop = keep;
+  // The list was rebuilt under a keyboard user: focus goes back to the row's add button or its first action.
+  if (state.refocus) {
+    const at = rows.findIndex(row => `${row.kind}:${row.start}` === state.refocus);
+    const node = at >= 0 ? list.querySelector(`[data-row="${at}"]`) : null;
+    const target = node && (node.querySelector('.row-actions button') || node.querySelector('.row-add'));
+    if (target) target.focus({ preventScroll: true });
+    state.refocus = null;
+  }
   follow.focus = null;
   frame(true, { reposition: false });
   if (state.fresh !== null) {
@@ -971,6 +999,8 @@ function renderBand(pos) {
 // Selection and the side panel's editor for one cheer.
 
 function select(index) {
+  // Watching changes nothing: a cheer's tag only jumps to it.
+  if (root.dataset.mode === 'watch') { const event = chart().events[index]; if (event) seek(playbackTime(event.start)); return; }
   state.selected = index === state.selected ? null : index;
   renderTimeline();
   renderSelected();
@@ -1236,7 +1266,7 @@ function openLyrics() {
   $('lyrics-dialog').showModal();
 }
 
-function applyLyrics(text) {
+function applyLyrics(text, { restoring = false } = {}) {
   state.lyricsText = text;
   if (!text.trim()) { state.lyrics = null; }
   else {
@@ -1254,7 +1284,7 @@ function applyLyrics(text) {
   // With no audio and no length yet, the length comes with the lyrics: the record picked online,
   // the file's own length tag, or a guess from its last line that the maker should check.
   let lengthNote = '';
-  if (state.lyrics && !chart().song.duration && !hasAudio()) {
+  if (!restoring && state.lyrics && !chart().song.duration && !hasAudio()) {
     const picked = state.lyricsDuration && state.lyricsDuration.text === text ? state.lyricsDuration.duration : null;
     const guess = picked ? { duration: picked, source: 'picked' } : lyricLines().length ? L.durationFromLyrics(state.lyrics) : null;
     if (guess) {
@@ -1527,6 +1557,8 @@ function syncTapButton() {
 
 function tapTempo() {
   const playing = transport.ready && !transport.paused;
+  // With audio the taps go with the music, so they need it playing; only the silent clock counts taps on their own.
+  if (!playing && hasAudio()) { state.taps = null; syncTapButton(); status('边播放边跟着鼓点按 T（或点“跟拍 8 下估 BPM”），连按 8 下。', true); return; }
   if (!playing && !(duration() > 0)) { status('先填写歌曲时长或选择本地音频，再跟拍。', true); return; }
   // Without playback the taps are timed on the wall clock: they give the tempo, not where a bar starts.
   const now = performance.now() / 1000;
@@ -1607,7 +1639,8 @@ const editorSurface = target => target === document.body || target === document.
 window.addEventListener('keydown', event => {
   if (!state.ed || typingTarget(event.target) || event.altKey) return;
   const mod = event.metaKey || event.ctrlKey;
-  if (mod && event.code === 'KeyZ') { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
+  const watching = root.dataset.mode === 'watch';
+  if (mod && event.code === 'KeyZ') { if (watching) return; event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
   if (mod) return;
   const { key, code } = event;
   if (code === 'Space') { if (editorSurface(event.target)) { event.preventDefault(); togglePlay(); } return; }
@@ -1616,10 +1649,10 @@ window.addEventListener('keydown', event => {
     if (state.held.size) { dropHeld('已取消正在记录的这一下。'); return; }
     state.selected = null; renderTimeline(); renderSelected(); return;
   }
+  if (watching) return;
   if ((key === 'Delete' || key === 'Backspace') && state.selected !== null && editorSurface(event.target)) {
     event.preventDefault(); state.ed.removeEvent(state.selected); state.selected = null; status('已删除这一条（可以撤销）。', true); changed(); return;
   }
-  if (root.dataset.mode === 'watch') return;
   if (code === 'KeyT' && !event.repeat) { event.preventDefault(); tapTempo(); return; }
   const stick = stickForCode(code);
   if (stick) { event.preventDefault(); if (!event.repeat) press(stick, { code }); }
@@ -1696,7 +1729,8 @@ function wire() {
     const shown = chart().song.duration ? formatClock(chart().song.duration) : '';
     if (text === shown) return;
     const seconds = E.parseDuration(text);
-    if (seconds === null) { status('请按 分:秒 填写，例如 3:45。', true); e.target.value = shown; return; }
+    // "3.45" reads as 3.45 seconds; no song is that short, so it is taken as a slip for 3:45.
+    if (seconds === null || seconds < 10) { status('请按 分:秒 填写，例如 3:45。', true); e.target.value = shown; return; }
     updateSong({ duration: seconds }, 'song:duration');
     status(`歌曲时长设为 ${formatClock(seconds)}。可以点“播放”无声计时，或在“歌词…”里加载歌词。`, true);
   });
@@ -1879,7 +1913,7 @@ async function start() {
   const typed = draft && draft.grid;
   state.manualGrid = typed && typeof typed === 'object' && typeof typed.audioName === 'string' && Number.isFinite(typed.duration) && typed.duration > 0 &&
     S.gridFromBPM(typed.bpm, typed.anchor, typed.duration) ? { bpm: typed.bpm, anchor: typed.anchor, audioName: typed.audioName, duration: typed.duration } : null;
-  if (draft && typeof draft.lyricsText === 'string' && draft.lyricsText) { state.lyricsText = draft.lyricsText; applyLyrics(draft.lyricsText); state.dirty = !!draft.dirty; }
+  if (draft && typeof draft.lyricsText === 'string' && draft.lyricsText) { state.lyricsText = draft.lyricsText; applyLyrics(draft.lyricsText, { restoring: true }); state.dirty = !!draft.dirty; }
   if (draft && chart().events.length) status(`已恢复上次的草稿（${chart().events.length} 条应援）。${draft.audioName ? `重新选择音频“${draft.audioName}”即可继续。` : '可以点“播放”无声计时，或选择本地音频。'}`);
   else status('选择本地音频，或不用音频：填上时长、加载歌词就能开始。音频只在你的浏览器里播放，不会上传。');
   // A link from the library opens that file once; the address is then cleaned so a reload does

@@ -7,14 +7,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const settled = () => new Promise(resolve => setImmediate(resolve));
+
 function setup() {
   const clock = { now: 0, timers: new Map(), nextId: 1 };
   const audio = {
     paused: true, currentTime: 0, duration: NaN, playbackRate: 1, listeners: {},
     addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); },
     fire(name) { for (const fn of this.listeners[name] || []) fn(); },
-    play() { this.paused = false; this.fire('play'); return Promise.resolve(); },
-    pause() { if (!this.paused) { this.paused = true; this.fire('pause'); } },
+    // As in a browser, the element reports play and pause later, not during the call.
+    play() { this.paused = false; queueMicrotask(() => this.fire('play')); return Promise.resolve(); },
+    pause() { if (!this.paused) { this.paused = true; queueMicrotask(() => this.fire('pause')); } },
   };
   const source = fs.readFileSync(path.join(__dirname, '../site/editor/timesource.js'), 'utf8');
   const context = {};
@@ -114,16 +117,26 @@ test('audio takes over from the silent clock and hands back its position', async
   assert.equal(transport.kind, 'audio');
   assert.deepEqual(events, ['play', 'pause']);
   assert.equal(transport.duration(), 200);
+  // The audio starts where the silent clock was.
+  assert.equal(audio.currentTime, 1);
   audio.currentTime = 42;
   await transport.play();
+  await settled();
   assert.equal(transport.paused, false);
   assert.equal(transport.position(), 42);
+  assert.deepEqual(events, ['play', 'pause', 'play']);
   transport.seek(500);
   assert.equal(audio.currentTime, 200);
   audio.currentTime = 7;
+  // Leaving audio that is playing: the pause is announced at once, and only once, although the
+  // element's own pause event arrives after it has stopped being the source.
   transport.useSilent(10);
+  assert.deepEqual(events, ['play', 'pause', 'play', 'pause']);
+  await settled();
+  assert.deepEqual(events, ['play', 'pause', 'play', 'pause']);
   assert.equal(audio.paused, true);
   assert.equal(transport.kind, 'silent');
+  assert.equal(transport.paused, true);
   assert.equal(transport.position(), 7);
   // The silent clock no longer passes the audio element's events on.
   const seen = events.length;

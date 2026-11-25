@@ -117,7 +117,7 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .share-outcome { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
 .check { display: flex; gap: 8px; align-items: flex-start; }
 
-.editor[data-mode="watch"] .ed-side, .editor[data-mode="watch"] .sticks, .editor[data-mode="watch"] #tap-tempo, .editor[data-mode="watch"] .metronome, .editor[data-mode="watch"] .ed-actions > :not(#toggle-mode):not(#pick-audio):not(#open-lyrics):not(#open-import) { display: none; }
+.editor[data-mode="watch"] .ed-side, .editor[data-mode="watch"] .sticks, .editor[data-mode="watch"] .grid-fix, .editor[data-mode="watch"] .metronome, .editor[data-mode="watch"] .ed-actions > :not(#toggle-mode):not(#pick-audio):not(#open-lyrics):not(#open-import) { display: none; }
 .editor[data-mode="watch"] .ed-main { grid-template-columns: 1fr; }
 .editor[data-mode="watch"] .row { grid-template-columns: 6px minmax(0, 1fr); padding: 10px 24px; border-left-color: transparent; }
 .editor[data-mode="watch"] .row .time, .editor[data-mode="watch"] .row .tags, .editor[data-mode="watch"] .row.gap { display: none; }
@@ -176,9 +176,10 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .candidates { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 14em; overflow: auto; }
 .candidates button { width: 100%; text-align: left; }
 .row { grid-template-columns: 4.2em 6px minmax(0, 1fr) auto; }
-.row-add { visibility: hidden; padding: 0 8px; font-size: 1rem; line-height: 1.5; align-self: start; }
-.row:hover .row-add, .row:focus-within .row-add, .row-add[aria-expanded="true"] { visibility: visible; }
-@media (hover: none) { .row-add { visibility: visible; } }
+/* Dimmed rather than hidden, so the button stays in the Tab order. */
+.row-add { opacity: 0; padding: 0 8px; font-size: 1rem; line-height: 1.5; align-self: start; }
+.row:hover .row-add, .row:focus-within .row-add, .row-add:focus, .row-add[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .row-add { opacity: 1; } }
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .row-actions button { padding: 2px 10px; font-size: 0.88rem; }
 .editor[data-mode="watch"][data-lyrics="none"] .row { grid-template-columns: 4.2em 6px minmax(0, 1fr); }

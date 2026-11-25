@@ -1,0 +1,85 @@
+{
+  "credits": {
+    "authors": [
+      {
+        "name": "Alexpsz"
+      }
+    ],
+    "permission": "original",
+    "sources": [
+      {
+        "kind": "self"
+      }
+    ]
+  },
+  "events": [
+    {
+      "end": 201.17,
+      "kind": "mix",
+      "mixRef": "tradition:oborozuki",
+      "readings": {
+        "kana": [
+          "ありあけ",
+          "いざよい",
+          "おぼろづき",
+          "さくげつ",
+          "さんこう",
+          "ひょうりん",
+          "げっか",
+          "きんうぎょくと",
+          "じつげつせいしん",
+          "げんげつ",
+          "むげつ",
+          "あまみつつき"
+        ],
+        "romaji": [
+          "Ariake",
+          "Izayoi",
+          "Oborozuki",
+          "Sakugetsu",
+          "Sankō",
+          "Hyōrin",
+          "Gekka",
+          "Kin'u gyokuto",
+          "Jitsugetsu seishin",
+          "Gengetsu",
+          "Mugetsu",
+          "Amamitsutsuki"
+        ]
+      },
+      "start": 189.84824009253254,
+      "steps": [
+        0,
+        0.7471175950722966,
+        1.4942351901446216,
+        2.9884703802892147,
+        3.7355879753615397,
+        4.482705570433836,
+        5.229823165506133,
+        5.976940760578458,
+        7.471175950723051,
+        8.965411140867673,
+        9.712528735939998,
+        10.459646331012294
+      ],
+      "tapped": true,
+      "text": "有明！十六夜！朧月！朔月！三光！氷輪！月下！金烏玉兎！日月星辰！幻月！無月！天満月！"
+    }
+  ],
+  "format": "liveglow-cheer",
+  "generator": "Liveglow 0.2.0",
+  "members": [],
+  "offset": 0,
+  "song": {
+    "album": "いま、月は満ちる - Single",
+    "appleMusicID": "1829904748",
+    "artist": "nearly-equal-joy",
+    "duration": 282.748,
+    "title": "いま、月は満ちる"
+  },
+  "version": 1,
+  "submittedBy": {
+    "name": "Alexpsz",
+    "url": "https://x.com/10_psz_16"
+  }
+}

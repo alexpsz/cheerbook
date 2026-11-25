@@ -7,8 +7,9 @@ import lib from '/editor/lib.js';
 import { setupSubmission } from '/editor/submission.js';
 import { h, clear, formatTime, formatClock, debounce, download, storage, typingTarget } from '/editor/dom.js';
 import { createTransport } from '/editor/timesource.js';
+import { createYouTubePlayer } from '/editor/youtube.js';
 
-const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P, lyricsview: V, mixes: MX } = lib;
+const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P, lyricsview: V, mixes: MX, video: VD } = lib;
 
 const DRAFT_KEY = 'cheerbook.editor.draft.v1';
 const REPO = 'https://github.com/alexpsz/cheerbook';
@@ -68,6 +69,12 @@ const state = {
   wallTaps: false,
   // 'community' after "在网页中播放": a bar saying there is no sound, until audio is chosen or it is closed.
   notice: null,
+  // A pasted video or a hand-synced one (C-016): `{ mode: 'youtube' | 'bilibili' | 'external' | 'failed', link, … }`.
+  video: null,
+  // The video used with this cheer last time, offered again but never loaded by itself.
+  videoOffer: null,
+  // Whether this cheer has been edited against a video that the page follows (YouTube).
+  watched: false,
 };
 const DRAFT_BACKUP_KEY = 'cheerbook.editor.draft.backup.v1';
 const DISPLAY_KEY = 'cheerbook.editor.display.v1';
@@ -84,7 +91,8 @@ const position = () => transport.position();
 const chart = () => state.ed.chart;
 const cheerTime = pos => pos + (chart().offset || 0);
 const playbackTime = time => time - (chart().offset || 0);
-const duration = () => transport.duration() || chart().song.duration || 0;
+// With a video the song's own length comes first: the video usually runs on past the song.
+const duration = () => (transport.kind === 'video' ? chart().song.duration || transport.duration() : transport.duration() || chart().song.duration || 0);
 const hasAudio = () => transport.kind === 'audio';
 const lyricLines = () => (state.lyrics && state.lyrics.lines.filter(line => Number.isFinite(line.start))) || [];
 const lyricTexts = () => (state.lyrics ? state.lyrics.lines.map(line => line.text) : []);
@@ -123,7 +131,7 @@ const saveDraft = debounce(() => {
   if (!state.ed) return;
   const ok = storage.set(DRAFT_KEY, {
     chart: chart(), compensation: state.ed.compensation, lyricsText: state.lyricsText, dirty: state.dirty,
-    audioName: state.audioName, heard: state.heard, member: state.member, sourcePath: state.sourcePath, sourceSha256: state.sourceSha256, grid: state.manualGrid, savedAt: new Date().toISOString(),
+    audioName: state.audioName, heard: state.heard, watched: state.watched, member: state.member, sourcePath: state.sourcePath, sourceSha256: state.sourceSha256, grid: state.manualGrid, savedAt: new Date().toISOString(),
   });
   if (!ok && !state.storageWarned) {
     state.storageWarned = true;
@@ -136,6 +144,7 @@ function changed({ save = true, panel = true } = {}) {
   if (draftSnapshot && draftSnapshot !== chart()) resetDraftLink();
   if (save) state.dirty = true;
   if (save && hasAudio()) state.heard = true;
+  if (save && transport.kind === 'video') state.watched = true;
   syncSource();
   check();
   renderAll({ panel });
@@ -187,6 +196,7 @@ function pickAudio() { $('audio-file').click(); }
 
 async function loadAudio(file) {
   if (!file) return;
+  closeVideo({ quiet: true });
   if (state.audioURL) URL.revokeObjectURL(state.audioURL);
   state.audioURL = URL.createObjectURL(file);
   state.audioName = file.name;
@@ -230,6 +240,292 @@ function guessSong(name) {
   return parts.length === 2 ? { artist: parts[0].trim(), title: parts[1].trim() } : { title: base };
 }
 
+// ---------------------------------------------------------------------------------------------
+// A pasted video (C-016). YouTube is followed through its own player API; Bilibili can only be
+// shown, so the cheers run on the silent clock, started by hand when the song starts ("手动对时"),
+// as they do for a video playing anywhere else. Nothing is fetched from either until the visitor
+// has pasted a link and chosen "加载视频"; the link and the start are kept in this browser only.
+
+const VIDEOS_KEY = 'cheerbook.editor.videos.v1';
+const manual = () => (state.video && (state.video.mode === 'bilibili' || state.video.mode === 'external') ? state.video : null);
+const platformName = link => (link.platform === 'youtube' ? 'YouTube' : 'Bilibili');
+/** What a remembered video is kept under: the community file, or the song when it has a name. */
+function chartKey() {
+  const song = chart().song;
+  return state.sourcePath || (song.title && song.artist ? [song.artist, song.title, Math.round(song.duration || 0)].join('\n') : null);
+}
+
+function rememberVideo() {
+  const key = chartKey(), video = state.video;
+  if (!key || !video || !video.link || video.mode === 'failed') return;
+  const saved = storage.get(VIDEOS_KEY);
+  const all = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  all[key] = { link: video.link, offset: video.mode === 'youtube' ? transport.videoOffset : 0, marked: video.marked === true, start: video.start ?? null, at: Date.now() };
+  storage.set(VIDEOS_KEY, Object.fromEntries(Object.entries(all).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, 20)));
+}
+
+/** After a cheer is opened: the video used with it last time is offered, never loaded by itself. */
+function offerVideo() {
+  const key = chartKey();
+  const all = storage.get(VIDEOS_KEY);
+  const saved = key && all && typeof all === 'object' ? all[key] : null;
+  // What was stored is checked again as if it had just been pasted.
+  const link = saved && saved.link && VD.videoWatchURL(saved.link) ? saved.link : null;
+  state.videoOffer = link && !state.video ? {
+    link, marked: saved.marked === true,
+    offset: Number.isFinite(saved.offset) && saved.offset > 0 ? saved.offset : 0,
+    start: Number.isInteger(saved.start) && saved.start > 0 ? saved.start : null,
+  } : null;
+  renderVideoOffer();
+}
+
+function renderVideoOffer() {
+  const offer = state.videoOffer;
+  $('video-offer').hidden = !offer;
+  if (offer) $('video-offer-text').textContent = `上次用的是一个 ${platformName(offer.link)} 视频。为保护隐私，没有自动加载；点“加载视频”后会连接 ${platformName(offer.link)}。`;
+}
+
+function openVideoDialog() {
+  $('video-link').value = '';
+  $('video-start').value = '';
+  renderVideoDialog();
+  $('video-dialog').showModal();
+  $('video-link').focus();
+}
+
+/** Reads the pasted link and says what it is; returns it when it is one this page can load. */
+function renderVideoDialog() {
+  const text = $('video-link').value.trim();
+  const found = text ? VD.parseVideoLink(text) : null;
+  const ok = !!found && found.ok;
+  const bilibili = ok && found.platform === 'bilibili';
+  $('video-load').disabled = !ok;
+  $('video-consent-youtube').hidden = !(ok && found.platform === 'youtube');
+  $('video-consent-bilibili').hidden = !bilibili;
+  $('video-start-row').hidden = !bilibili;
+  $('video-start-note').hidden = !bilibili;
+  if (!bilibili) $('video-start').value = '';
+  else if (!$('video-start').value && found.start) $('video-start').value = formatClock(found.start);
+  $('video-recognized').textContent = !text ? ''
+    : ok ? (bilibili ? '已识别：Bilibili 视频（页面读不到播放进度，加载后用“开始 / 微调”手动对时）。' : '已识别：YouTube 视频（页面会自动跟随视频进度）。')
+      : found.reason === 'shortLink' ? '这是短链，页面认不出它指向哪个视频。请先在浏览器打开视频，再复制地址栏的完整链接。'
+        : '认不出这个链接。目前只支持 YouTube 和 Bilibili 的链接，不支持 b23.tv 这类短链——请先在浏览器打开视频，再复制地址栏的完整链接。其他来源请点下方“改用手动对时”。';
+  return ok ? found : null;
+}
+
+function loadFromDialog() {
+  const link = renderVideoDialog();
+  if (!link) return;
+  let start = null;
+  if (link.platform === 'bilibili' && $('video-start').value.trim()) {
+    const seconds = E.parseDuration($('video-start').value);
+    if (seconds === null) { $('video-recognized').textContent = '歌曲起点请按 分:秒 填写，例如 1:23；不填就从头加载。'; return; }
+    start = Math.floor(seconds);
+  }
+  $('video-dialog').close('load');
+  loadVideo(link, { start });
+}
+
+/**
+ * Loads the video of a link that lib/video.js has read (never a string the visitor typed).
+ * `start` is where Bilibili's player should open; `offset` and `marked` restore a YouTube start.
+ */
+async function loadVideo(link, { start = null, offset = null, marked = false } = {}) {
+  closeVideo({ quiet: true });
+  state.videoOffer = null;
+  renderVideoOffer();
+  if (hasAudio()) dropAudio({ quiet: true });
+  if (link.platform === 'bilibili') {
+    const src = VD.bilibiliEmbedURL(link, start === null ? {} : { start });
+    if (!src) return;
+    // The frame may run its player and open Bilibili in a new tab, but can never navigate this page away.
+    clear($('video-frame')).append(h('iframe', {
+      src, title: 'Bilibili 视频', allow: 'fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true,
+      sandbox: 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation',
+    }));
+    state.video = { mode: 'bilibili', link, start, phase: 'standby', nudge: 0 };
+    rememberVideo();
+    syncSource();
+    renderVideo();
+    status(transport.ready ? '已加载 Bilibili 视频。在视频里播放，歌一响就点“开始”。' : '已加载 Bilibili 视频。先在上方填写歌曲时长，才能对时。', true);
+    return;
+  }
+  const video = { mode: 'youtube', link, loading: true, marked: false };
+  state.video = video;
+  renderVideo();
+  try {
+    const from = offset ?? link.start ?? 0;
+    const player = await createYouTubePlayer($('video-frame'), link.id, {
+      start: from, notify: name => transport.notify(name),
+      onError: kind => { if (state.video === video) videoFailed(video, kind); },
+    });
+    // Closed, or another one chosen, while this one was loading.
+    if (state.video !== video) { player.destroy(); return; }
+    video.player = player;
+    video.loading = false;
+    video.marked = marked || from > 0;
+    transport.useVideo(player, from);
+    transport.setRate(Number($('rate').value) || 1);
+    // A cheer with no length yet takes the rest of the video, until "歌到这里结束" says better.
+    if (!chart().song.duration && transport.duration() > 0) updateSong({ duration: Math.min(7200, Math.round(transport.duration() * 1000) / 1000) }, 'song');
+    rememberVideo();
+    syncSource();
+    renderVideo();
+    frame(true);
+    status(video.marked ? `已加载 YouTube 视频，歌曲起点在视频的 ${formatTime(from)}。` : '已加载 YouTube 视频。把视频播到这首歌开始的地方，点“歌从这里开始”。', true);
+  } catch (error) {
+    if (state.video === video) videoFailed(video, error && error.message);
+  }
+}
+
+function videoFailed(video, kind) {
+  if (transport.kind === 'video') transport.useSilent(chart().song.duration || 0);
+  if (video.player) video.player.destroy();
+  clear($('video-frame'));
+  state.video = { mode: 'failed', link: video.link, failure: kind };
+  syncSource();
+  renderVideo();
+  frame(true);
+}
+
+/** "外部播放 · 手动对时": the video or the song plays somewhere else; the cheers are started by hand. */
+function startExternal() {
+  closeVideo({ quiet: true });
+  if (hasAudio()) dropAudio({ quiet: true });
+  state.video = { mode: 'external', link: null, phase: 'standby', nudge: 0 };
+  syncSource();
+  renderVideo();
+  status(transport.ready ? '在别处播放这首歌，歌一响就点“开始”。' : '先在上方填写歌曲时长，才能对时。', true);
+}
+
+function closeVideo({ quiet = false } = {}) {
+  const video = state.video;
+  if (!video) return;
+  // The silent clock takes over from where the video was, so it is asked before the player goes.
+  if (transport.kind === 'video') transport.useSilent(chart().song.duration || 0);
+  if (video.player) video.player.destroy();
+  clear($('video-frame'));
+  state.video = null;
+  $('rate').disabled = false;
+  syncSource();
+  renderVideo();
+  frame(true);
+  if (!quiet) status('已关闭。现在是无声计时：页面自己计时，没有声音。', true);
+}
+
+function manualStart() {
+  const hand = manual();
+  if (!hand) return;
+  if (!transport.ready) { status('还不知道这首歌多长：先在上方填“时长”，或在“歌词…”里在线查找。', true); return; }
+  hand.phase = 'running';
+  hand.nudge = 0;
+  transport.seek(0);
+  transport.play();
+  syncSource();
+  renderVideo();
+}
+
+/** 提前 / 推后: the cheers come that much sooner or later from here on; the running total stays in view. */
+function manualNudge(delta) {
+  const hand = manual();
+  if (!hand || hand.phase !== 'running') return;
+  hand.nudge = Math.round((hand.nudge + delta) * 10) / 10;
+  seek(position() + delta);
+  renderVideo();
+}
+
+function manualReset() {
+  const hand = manual();
+  if (!hand) return;
+  hand.phase = 'standby';
+  hand.nudge = 0;
+  hand.ended = false;
+  transport.pause();
+  transport.seek(0);
+  syncSource();
+  renderVideo();
+  frame(true);
+}
+
+/** YouTube: the song starts where the video is now; from then on the editor's time is the song's. */
+function markStart() {
+  const video = state.video;
+  if (!video || transport.kind !== 'video') return;
+  const at = Math.round(transport.videoPosition() * 10) / 10;
+  video.marked = true;
+  transport.setVideoOffset(at);
+  afterOffset();
+  status(`歌曲起点设在视频的 ${formatTime(at)}。不准的话用“提前 / 推后 0.1 秒”微调。`, true);
+}
+function nudgeStart(delta) {
+  if (transport.kind !== 'video') return;
+  transport.setVideoOffset(Math.max(0, Math.round((transport.videoOffset + delta) * 10) / 10));
+  afterOffset();
+}
+function unmarkStart() {
+  const video = state.video;
+  if (!video || transport.kind !== 'video') return;
+  video.marked = false;
+  transport.setVideoOffset(0);
+  afterOffset();
+}
+function afterOffset() {
+  rememberVideo();
+  syncSource();
+  renderVideo();
+  frame(true);
+}
+/** YouTube, while making a cheer: the song ends where the video is now. */
+function markEnd() {
+  if (transport.kind !== 'video') return;
+  const seconds = Math.round(position() * 1000) / 1000;
+  if (seconds < 10) { status('离歌曲起点太近了：先标记歌曲起点，再把视频播到歌结束的地方。', true); return; }
+  if (seconds > 7200) { status('歌曲最长 2 小时。', true); return; }
+  updateSong({ duration: seconds }, 'song:duration');
+  const from = transport.videoOffset;
+  status(`已将歌曲时长设为 ${formatClock(seconds)}（视频 ${formatTime(from)}–${formatTime(from + seconds)}）。`, true);
+}
+
+const VIDEO_FAILURES = {
+  embedDisabled: '上传者禁止在其他网站播放这个视频。可以换一个视频，或在原网站打开它，再在这里用“手动对时”。',
+  gone: '这个视频不存在，或者已被删除、设为不公开。可以换一个视频。',
+};
+
+function renderVideo() {
+  const video = state.video;
+  $('video-panel').hidden = !video;
+  root.dataset.video = video && (video.mode === 'youtube' || video.mode === 'bilibili') ? 'frame' : 'none';
+  if (!video) return;
+  const youtube = video.mode === 'youtube' && !video.loading, failed = video.mode === 'failed', hand = manual();
+  $('video-mark').hidden = !youtube;
+  $('video-manual').hidden = !hand;
+  $('video-manual-note').hidden = video.mode !== 'bilibili';
+  $('video-open').hidden = !video.link;
+  if (video.link) $('video-open').href = VD.videoWatchURL(video.link);
+  for (const id of ['video-change', 'video-retry', 'video-to-external']) $(id).hidden = !failed;
+  $('video-close').textContent = video.mode === 'external' ? '结束手动对时' : '关闭视频';
+  $('video-status').textContent = failed ? VIDEO_FAILURES[video.failure] || `连不上 ${platformName(video.link)}，视频没能加载。可以重试、换其他来源，或改用无声计时。`
+    : video.loading ? '正在连接 YouTube…'
+      : youtube ? 'YouTube 视频：应援跟着视频走。在视频上播放、暂停、拖动都可以。'
+        : hand.phase === 'standby' ? (video.mode === 'bilibili' ? '视频里歌一响，就点“开始”' : '歌一响，就点“开始”')
+          : video.ended ? '本首应援已结束' : transport.paused ? '已暂停' : '正在跟着计时。对不上时用“提前 / 推后 0.1 秒”。';
+  if (youtube) {
+    for (const id of ['video-mark-hint', 'video-mark-start']) $(id).hidden = video.marked;
+    for (const id of ['video-mark-at', 'video-mark-earlier', 'video-mark-later', 'video-mark-again']) $(id).hidden = !video.marked;
+    $('video-mark-at').textContent = `歌曲起点 ${formatTime(transport.videoOffset)}`;
+    $('video-mark-end').hidden = false;
+  }
+  if (hand) {
+    const running = hand.phase === 'running';
+    for (const id of ['manual-earlier', 'manual-later', 'manual-reset']) $(id).disabled = !running;
+    $('manual-nudge').textContent = hand.nudge > 0.049 ? `已提前 ${hand.nudge.toFixed(1)} 秒` : hand.nudge < -0.049 ? `已推后 ${(-hand.nudge).toFixed(1)} 秒` : '';
+    // The page cannot slow a video it does not control, so the clock keeps to 1×.
+    if ($('rate').value !== '1') { $('rate').value = '1'; transport.setRate(1); }
+  }
+  $('rate').disabled = !!hand;
+  syncPlayLabel();
+}
+
 /** Leaves the audio file for the silent clock ("切回无声"), or clears a file that would not load. */
 function dropAudio({ quiet = false } = {}) {
   if (state.worker) { state.worker.terminate(); state.worker = null; }
@@ -257,22 +553,25 @@ function dropAudio({ quiet = false } = {}) {
 let sourceKey = '';
 function syncSource() {
   if (!state.ed) return;
-  if (!hasAudio()) {
+  if (!hasAudio() && transport.kind !== 'video') {
     const length = chart().song.duration || 0;
     if (transport.kind !== 'silent' || transport.duration() !== length) transport.useSilent(length);
   }
   const ready = transport.ready;
-  const key = [transport.kind, ready, duration(), state.notice, !!state.lyrics].join(':');
+  const video = state.video;
+  const key = [transport.kind, ready, duration(), state.notice, !!state.lyrics, video && video.mode, video && video.phase].join(':');
   if (key === sourceKey) return;
   sourceKey = key;
   for (const id of ['play', 'seek']) $(id).disabled = !ready;
   $('seek').max = String(duration());
   $('grid-set').hidden = !ready;
   $('source').hidden = !ready;
-  $('source').textContent = hasAudio() ? '本地音频' : '无声计时';
+  $('source').textContent = hasAudio() ? '本地音频' : transport.kind === 'video' ? 'YouTube'
+    : video && video.mode === 'bilibili' ? 'Bilibili · 手动对时' : video && video.mode === 'external' ? '外部播放 · 手动对时' : '无声计时';
   $('source-silent').hidden = !hasAudio();
   $('song-duration').readOnly = hasAudio();
-  $('notice').hidden = !(state.notice && !hasAudio() && ready);
+  $('notice').hidden = !(state.notice && !hasAudio() && !video && ready);
+  syncPlayLabel();
   root.dataset.ready = String(ready || !!state.lyrics);
   // A tempo typed or tapped for the silent clock comes back with the draft, as one for a file does.
   if (!hasAudio() && ready && !state.grid && typedForThisAudio()) {
@@ -504,7 +803,17 @@ function restoreAutoGrid() {
   status('已恢复自动分析的节拍。', true);
 }
 
+/** The play button says what it will do; with a YouTube video it names YouTube, whose player it drives. */
+function syncPlayLabel() {
+  const hand = manual();
+  const youtube = transport.kind === 'video';
+  $('play').textContent = !transport.paused ? (youtube ? '暂停 YouTube' : '暂停')
+    : hand ? (hand.phase === 'standby' ? '开始' : '继续') : youtube ? '播放 YouTube' : '播放';
+}
+
 function togglePlay() {
+  const hand = manual();
+  if (hand && hand.phase === 'standby') { manualStart(); return; }
   if (!transport.ready) { status('还不知道这首歌多长：在上方填“时长”，在“歌词…”里在线查找，或选择本地音频。', true); return; }
   if (transport.paused) transport.play().catch(() => status('浏览器没有允许播放，请再点一次播放。', true));
   else transport.pause();
@@ -539,9 +848,9 @@ function frame(force = false, { reposition = true } = {}) {
   if (state.held.size) renderHeldTags(pos);
 }
 
-transport.on('play', () => { $('play').textContent = '暂停'; click.reset(); frame(true); startLoop(); });
-transport.on('pause', () => { $('play').textContent = '播放'; click.reset(); frame(true); });
-transport.on('ended', () => { $('play').textContent = '播放'; });
+transport.on('play', () => { if (state.video) state.video.ended = false; syncPlayLabel(); renderVideo(); click.reset(); frame(true); startLoop(); });
+transport.on('pause', () => { syncPlayLabel(); renderVideo(); click.reset(); frame(true); });
+transport.on('ended', () => { if (state.video) state.video.ended = true; syncPlayLabel(); renderVideo(); });
 transport.on('seeked', () => { click.reset(); frame(true); });
 
 /** A dot that lights on each beat (brighter on bar lines), to check the grid by ear and eye. */
@@ -1386,8 +1695,11 @@ function importCheer(bytes, source, { path = null, sha256 = null } = {}) {
   state.sourceSha256 = sha256;
   // How a file from elsewhere was made is not known; only a cheer started here is asked about it.
   state.heard = true;
+  state.watched = false;
   state.notice = null;
+  closeVideo({ quiet: true });
   useChart(result.chart);
+  offerVideo();
   state.dirty = false;
   saveDraft();
   const song = chart().song;
@@ -1403,14 +1715,15 @@ function fileName(song, suffix = '') {
   return `${base}${suffix}.cheer.json`;
 }
 
-/** A cheer made here without ever hearing the song, and not yet saying so in its note. */
+/** A cheer made here without ever being checked against the recording, and not yet saying so in its note. */
 const unheard = () => !state.heard && chart().events.length > 0 && !(chart().credits.note || '').trim();
 const UNHEARD_NOTE = '凭记忆与歌词时间制作，未对着音频校对，在映场播放时可能需要微调偏移。';
+const WATCHED_NOTE = '对着视频制作（请写明版本或场次），未对着音源校对。';
 
 function saveLocal() {
   download(fileName(chart().song), E.serialize(chart()));
   markExported();
-  status(`已保存到本机下载文件夹。这份文件可以在映场里“导入…”。${unheard() ? '这份应援还没有对着音频校对过，可以在“分享 / 投稿”里填写制作说明。' : ''}`, true);
+  status(`已保存到本机下载文件夹。这份文件可以在映场里“导入…”。${unheard() ? (state.watched ? '这份应援是对着视频做的，可以在“分享 / 投稿”的制作说明里写明版本或场次。' : '这份应援还没有对着音频校对过，可以在“分享 / 投稿”里填写制作说明。') : ''}`, true);
 }
 
 // CheerEditor replaces its immutable chart on edits. A completed copy is usable only while
@@ -1478,6 +1791,9 @@ function shareTarget(prepared) {
 
 function renderShare() {
   $('share-unheard').hidden = !unheard();
+  $('share-unheard-text').textContent = state.watched
+    ? '对着视频制作时，时间只匹配这个视频里的版本（尤其是现场录像）。建议在制作说明里写明版本或场次。'
+    : '这份应援还没有对着音频或视频校对过，时间可能有出入。建议写进制作说明，方便使用的人在映场里微调偏移。';
   const choice = shareChoice();
   $('share-referenced').hidden = choice.kind !== 'referenced';
   const author = $('share-author').value.trim();
@@ -1558,7 +1874,7 @@ function syncTapButton() {
 function tapTempo() {
   const playing = transport.ready && !transport.paused;
   // With audio the taps go with the music, so they need it playing; only the silent clock counts taps on their own.
-  if (!playing && hasAudio()) { state.taps = null; syncTapButton(); status('边播放边跟着鼓点按 T（或点“跟拍 8 下估 BPM”），连按 8 下。', true); return; }
+  if (!playing && (hasAudio() || transport.kind === 'video')) { state.taps = null; syncTapButton(); status('边播放边跟着鼓点按 T（或点“跟拍 8 下估 BPM”），连按 8 下。', true); return; }
   if (!playing && !(duration() > 0)) { status('先填写歌曲时长或选择本地音频，再跟拍。', true); return; }
   // Without playback the taps are timed on the wall clock: they give the tempo, not where a bar starts.
   const now = performance.now() / 1000;
@@ -1714,11 +2030,33 @@ function wire() {
   $('toggle-mode').addEventListener('click', () => setMode(root.dataset.mode !== 'watch'));
   $('source-silent').addEventListener('click', () => dropAudio());
   $('notice-audio').addEventListener('click', pickAudio);
+  $('notice-video').addEventListener('click', openVideoDialog);
+  $('notice-external').addEventListener('click', startExternal);
+  $('open-video').addEventListener('click', openVideoDialog);
+  $('video-link').addEventListener('input', renderVideoDialog);
+  $('video-link').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); loadFromDialog(); } });
+  $('video-load').addEventListener('click', loadFromDialog);
+  $('video-external').addEventListener('click', () => { $('video-dialog').close('external'); startExternal(); });
+  $('video-offer-load').addEventListener('click', () => { const offer = state.videoOffer; if (offer) loadVideo(offer.link, offer.link.platform === 'youtube' ? { offset: offer.offset, marked: offer.marked } : { start: offer.start }); });
+  $('video-offer-skip').addEventListener('click', () => { state.videoOffer = null; renderVideoOffer(); });
+  $('video-close').addEventListener('click', () => closeVideo());
+  $('video-change').addEventListener('click', openVideoDialog);
+  $('video-retry').addEventListener('click', () => { if (state.video && state.video.link) loadVideo(state.video.link); });
+  $('video-to-external').addEventListener('click', startExternal);
+  $('video-mark-start').addEventListener('click', markStart);
+  $('video-mark-earlier').addEventListener('click', () => nudgeStart(-0.1));
+  $('video-mark-later').addEventListener('click', () => nudgeStart(0.1));
+  $('video-mark-again').addEventListener('click', unmarkStart);
+  $('video-mark-end').addEventListener('click', markEnd);
+  $('manual-earlier').addEventListener('click', () => manualNudge(0.1));
+  $('manual-later').addEventListener('click', () => manualNudge(-0.1));
+  $('manual-reset').addEventListener('click', manualReset);
   $('notice-close').addEventListener('click', () => { state.notice = null; syncSource(); });
   $('metronome').addEventListener('change', e => click.enable(e.target.checked));
   for (const node of document.querySelectorAll('[data-start]')) {
     node.addEventListener('click', () => {
       if (node.dataset.start === 'audio') pickAudio();
+      else if (node.dataset.start === 'video') openVideoDialog();
       else if (node.dataset.start === 'lyrics') openLyrics();
       else $('song-duration').focus();
     });
@@ -1801,7 +2139,11 @@ function wire() {
     state.sourcePath = null;
     state.sourceSha256 = null;
     state.heard = hasAudio();
+    state.watched = false;
     state.notice = null;
+    closeVideo({ quiet: true });
+    state.videoOffer = null;
+    renderVideoOffer();
     useChart(newChart({ title: chart().song.title, artist: chart().song.artist, duration: duration() }));
     $('more-dialog').close();
     status('已新建空白应援。', true);
@@ -1849,8 +2191,9 @@ function wire() {
   $('share-note').addEventListener('input', e => { if (!e.isComposing) setNote(e.target.value); });
   $('share-note').addEventListener('compositionend', e => setNote(e.target.value));
   $('share-note-fill').addEventListener('click', () => {
-    $('share-note').value = UNHEARD_NOTE;
-    setNote(UNHEARD_NOTE);
+    const note = state.watched ? WATCHED_NOTE : UNHEARD_NOTE;
+    $('share-note').value = note;
+    setNote(note);
     $('share-note').focus();
   });
   $('share-download').addEventListener('click', () => {
@@ -1907,6 +2250,7 @@ async function start() {
   state.dirty = !!(draft && draft.dirty);
   // A draft from before this was recorded is not asked about how it was made.
   state.heard = draft ? draft.heard !== false : false;
+  state.watched = !!(draft && draft.watched === true);
   state.member = draft && typeof draft.member === 'string' && chart().members.some(member => member.id === draft.member) ? draft.member : null;
   state.sourcePath = draft && typeof draft.sourcePath === 'string' && draft.sourcePath.startsWith(P.LIBRARY_DIR + '/') ? draft.sourcePath : null;
   state.sourceSha256 = draft && /^[a-f0-9]{64}$/.test(draft.sourceSha256) ? draft.sourceSha256 : null;
@@ -1942,6 +2286,7 @@ async function start() {
   check.flush();
   syncSource();
   renderAll();
+  if (!state.videoOffer) offerVideo();
   frame(true);
 }
 

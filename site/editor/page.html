@@ -11,6 +11,7 @@
   <div class="ed-actions" role="toolbar" aria-label="操作">
     <button type="button" id="pick-audio" class="primary">选择本地音频</button>
     <input type="file" id="audio-file" accept="audio/*,.flac,.m4a,.ogg,.opus" class="visually-hidden" tabindex="-1">
+    <button type="button" id="open-video">贴视频链接…</button>
     <button type="button" id="open-lyrics">歌词…</button>
     <button type="button" id="open-import">导入应援…</button>
     <input type="file" id="cheer-file" accept=".json,application/json" class="visually-hidden" tabindex="-1">
@@ -32,6 +33,7 @@
   <h2 id="welcome-title">开始制作应援</h2>
   <ul class="steps">
     <li><button type="button" data-start="audio">选择本地音频</button>：边听边打点，浏览器本地分析节拍，音频不会上传。</li>
+    <li><button type="button" data-start="video">贴视频链接</button>：粘贴 YouTube 或 Bilibili 的完整链接，边看视频边做应援。</li>
     <li><button type="button" data-start="duration">没有音频也能做</button>：填上时长或<button type="button" data-start="lyrics">在线查歌词</button>，用无声计时或直接按歌词放 call、MIX。</li>
   </ul>
   <p class="meta">按住成员按钮（或数字键 1–9）记录演唱段落，M / C / N 记录 MIX、call、提示；右侧 MIX 库一点就插入。歌词只用来对时间，不会写进应援文件。</p>
@@ -41,7 +43,48 @@
 <section class="ed-notice card" id="notice" aria-label="没有歌曲声音" hidden>
   <p>当前没有歌曲声音，点“播放”按时间看应援。想听着看：</p>
   <button type="button" id="notice-audio">选择本地音频</button>
+  <button type="button" id="notice-video">贴视频链接…</button>
+  <button type="button" id="notice-external">外部播放手动对时</button>
   <button type="button" id="notice-close" aria-label="关闭这条提示">×</button>
+</section>
+
+<section class="ed-notice card" id="video-offer" aria-label="上次用的视频" hidden>
+  <p id="video-offer-text"></p>
+  <button type="button" id="video-offer-load">加载视频</button>
+  <button type="button" id="video-offer-skip">暂不加载</button>
+</section>
+
+<section class="ed-video card" id="video-panel" aria-labelledby="video-title" hidden>
+  <h2 id="video-title" class="visually-hidden">视频与对时</h2>
+  <div id="video-frame" class="video-frame"></div>
+  <div class="video-side">
+    <p id="video-status" class="video-status" role="status" aria-live="polite"></p>
+    <div id="video-mark" class="dialog-row" hidden>
+      <span id="video-mark-hint">把视频播到这首歌开始的那一刻，再点右侧按钮（如果视频从 0:00 就是歌，可直接播放）：</span>
+      <button type="button" id="video-mark-start">歌从这里开始</button>
+      <strong id="video-mark-at" hidden></strong>
+      <button type="button" id="video-mark-earlier" hidden title="起点提前 0.1 秒，应援早 0.1 秒出现">提前 0.1 秒</button>
+      <button type="button" id="video-mark-later" hidden title="起点推后 0.1 秒，应援晚 0.1 秒出现">推后 0.1 秒</button>
+      <button type="button" id="video-mark-again" hidden>重新标记</button>
+      <button type="button" id="video-mark-end" hidden>歌到这里结束</button>
+    </div>
+    <div id="video-manual" class="dialog-row" hidden>
+      <span id="video-manual-hint"></span>
+      <button type="button" id="manual-earlier" title="应援早 0.1 秒出现">提前 0.1 秒</button>
+      <button type="button" id="manual-later" title="应援晚 0.1 秒出现">推后 0.1 秒</button>
+      <button type="button" id="manual-reset">从头对齐</button>
+      <span id="manual-nudge" class="meta"></span>
+    </div>
+    <p id="video-manual-note" class="meta" hidden>页面读不到 Bilibili 进度：在视频上暂停或拖动后，应援不会跟着变，需点“从头对齐”重新对时。</p>
+    <div class="dialog-row">
+      <a id="video-open" target="_blank" rel="noopener" hidden>去原网站打开</a>
+      <button type="button" id="video-change" hidden>换一个视频</button>
+      <button type="button" id="video-retry" hidden>重试</button>
+      <button type="button" id="video-to-external" hidden>改用手动对时</button>
+      <button type="button" id="video-close">关闭</button>
+      <a href="/privacy/" target="_blank" rel="noopener">隐私说明</a>
+    </div>
+  </div>
 </section>
 
 <div class="ed-main">
@@ -104,6 +147,23 @@
   </div>
   <div id="sticks" class="sticks" role="toolbar" aria-label="打点：按住记录，松开结束"></div>
 </section>
+
+<dialog id="video-dialog" aria-labelledby="video-dialog-title">
+  <div class="dialog-body">
+    <h2 id="video-dialog-title">贴视频链接</h2>
+    <label class="ed-field block"><span>视频链接</span><input id="video-link" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="粘贴 YouTube 或 Bilibili 的完整网页链接"></label>
+    <p id="video-recognized" role="status" aria-live="polite"></p>
+    <label class="ed-field" id="video-start-row" hidden><span>视频里歌曲起点（选填）</span><input id="video-start" autocomplete="off" inputmode="numeric" maxlength="12" placeholder="如 1:23" aria-describedby="video-start-note"></label>
+    <p class="meta" id="video-start-note" hidden>播放器会停在这里加载，不会自动播放。</p>
+    <p class="meta" id="video-consent-youtube" hidden>点“加载视频”后会连接 YouTube，对方能看到你的网络地址和正在看的视频。CheerBook 不会向对方发送应援内容；视频链接和起点只保存在这个浏览器里，不会写进应援文件。视频通过 YouTube API 服务播放：加载即表示你同意 <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube 服务条款</a>；YouTube 如何处理你的信息见 <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener">Google 隐私权政策</a>，本站的做法见<a href="/privacy/" target="_blank" rel="noopener">隐私说明</a>。</p>
+    <p class="meta" id="video-consent-bilibili" hidden>点“加载视频”后会连接 Bilibili，对方能看到你的网络地址和正在看的视频。CheerBook 不会向对方发送应援内容；视频链接和起点只保存在这个浏览器里，不会写进应援文件。详见<a href="/privacy/" target="_blank" rel="noopener">隐私说明</a>。</p>
+    <div class="dialog-row end">
+      <button type="button" data-close>取消</button>
+      <button type="button" id="video-load" class="primary" disabled>加载视频</button>
+    </div>
+    <p class="meta"><button type="button" id="video-external">视频在别的网站或设备上播放？改用手动对时</button></p>
+  </div>
+</dialog>
 
 <dialog id="lyrics-dialog" aria-labelledby="lyrics-title">
   <form method="dialog" class="dialog-body">
@@ -211,7 +271,7 @@
       <label><input type="radio" name="target" value="new"> 另投一份新文件</label>
       <p class="meta">修改已有投稿需要原作者或维护者批准，由维护者合并。</p>
     </fieldset>
-    <p id="share-unheard" class="meta" hidden>这份应援还没有对着音频校对过，时间可能有出入。建议写进制作说明，方便使用的人在映场里微调偏移。 <button type="button" id="share-note-fill">填入制作说明</button></p>
+    <p id="share-unheard" class="meta" hidden><span id="share-unheard-text">这份应援还没有对着音频或视频校对过，时间可能有出入。建议写进制作说明，方便使用的人在映场里微调偏移。</span> <button type="button" id="share-note-fill">填入制作说明</button></p>
     <label class="ed-field block"><span>制作说明（选填，最多 200 字）</span><textarea id="share-note" rows="2" maxlength="200"></textarea></label>
     <label class="check" id="share-confirm-row" hidden><input type="checkbox" id="share-confirm"> 没有歌词可核对；我确认文件里没有歌词原文</label>
     <p id="share-outcome" class="share-outcome" role="status" aria-live="polite"></p>

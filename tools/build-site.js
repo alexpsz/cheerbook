@@ -58,7 +58,7 @@ ${body}
 </div></main>
 <footer class="site"><div class="wrap">
 <p>CheerBook 是社区维护的应援时间轴库，不隶属于任何偶像组合、事务所或音乐平台；文件不含歌词。</p>
-<p>代码 GPL-3.0-only；格式说明与内置 MIX 库 CC0；投稿按各文件自己的许可（自己听写的默认 CC BY 4.0）。<a href="${REPO}/blob/main/docs/takedown.md">下架请求</a> · <a href="${REPO}">源代码</a> · <a href="${LIVEGLOW}">映场 Liveglow</a></p>
+<p>代码 GPL-3.0-only；格式说明与内置 MIX 库 CC0；投稿按各文件自己的许可（自己听写的默认 CC BY 4.0）。<a href="/privacy/">隐私说明</a> · <a href="${REPO}/blob/main/docs/takedown.md">下架请求</a> · <a href="${REPO}">源代码</a> · <a href="${LIVEGLOW}">映场 Liveglow</a></p>
 </div></footer>
 </body>
 </html>
@@ -184,6 +184,33 @@ function notFoundPage() {
   return layout({ title: '没有这个页面 · CheerBook 应援本', description: '没有这个页面。', current: '', body });
 }
 
+// What the site keeps, and which other services it reaches and when (C-016). Loading a YouTube video
+// uses YouTube API Services, whose terms ask for this page: that the site says so, links YouTube's
+// terms and Google's privacy policy, and tells what it does with user information (nothing).
+function privacyPage() {
+  const body = `<div class="hero"><h1>隐私说明</h1><p>CheerBook 不设访问统计，不放广告，没有账号系统。下面写明网站保存什么，以及什么时候会连接别的服务。</p></div>
+<section aria-labelledby="privacy-local"><h2 id="privacy-local">留在你浏览器里的</h2>
+<ul>
+<li>你选择的音频只在浏览器里播放和分析节拍，不会上传。</li>
+<li>你加载的歌词只用来对时间和显示，不会上传，也不会写进应援文件。</li>
+<li>草稿、显示设置，以及你贴过的视频链接和对时位置，保存在这个浏览器的本地存储里。想清掉，在浏览器里清除本站的数据即可。</li>
+</ul></section>
+<section aria-labelledby="privacy-third"><h2 id="privacy-third">会连接的其他服务</h2>
+<p>和访问任何网站一样，被连接的一方能看到你的网络地址。下面每一项都只在你做了对应的操作之后才会连接。</p>
+<ul>
+<li><strong>LRCLIB</strong>（lrclib.net，公开的歌词库）：点“在线查找”时，发送歌名、艺人，以及已知的歌曲时长。免账号投稿时，服务端也会用歌曲信息向它查询，核对文件里没有歌词原文。</li>
+<li><strong>Cloudflare Turnstile</strong>：打开“免账号投稿”时加载，用来确认不是自动程序；投稿接口按来源网络地址限流。</li>
+<li><strong>YouTube</strong>：在制作页贴了 YouTube 链接并点“加载视频”之后，才会加载 YouTube 的播放器。这一功能通过 YouTube API 服务（YouTube IFrame Player API）实现：使用它即表示你同意受 <a href="https://www.youtube.com/t/terms">YouTube 服务条款</a>约束；YouTube 如何处理你的信息，见 <a href="http://www.google.com/policies/privacy">Google 隐私权政策</a>。CheerBook 只从播放器读取播放位置、时长和播放状态，用来让应援跟着视频走；不读取、不收集、不保存你的 YouTube 账号信息或观看记录，也不会把你的应援内容发给 YouTube。YouTube 的播放器可能在你的设备上存取 Cookie 或类似技术。</li>
+<li><strong>哔哩哔哩</strong>：在制作页贴了 Bilibili 链接并点“加载视频”之后，才会加载哔哩哔哩的外链播放器。CheerBook 读不到它的任何播放信息，也不向它发送应援内容。</li>
+</ul>
+<p>网站由 Cloudflare 托管，托管方会像任何网站的服务器一样处理访问请求。</p></section>
+<section aria-labelledby="privacy-public"><h2 id="privacy-public">投稿后公开的</h2>
+<p>投稿的应援文件、你填的昵称和自愿填写的公开联系方式，会出现在公开的文件和 GitHub 投稿记录里，可长期查看。需要撤下时见<a href="${REPO}/blob/main/docs/takedown.md">下架请求</a>。</p></section>
+<section aria-labelledby="privacy-contact"><h2 id="privacy-contact">有问题</h2>
+<p>可以在 <a href="${REPO}/issues">GitHub</a> 上提出。</p></section>`;
+  return layout({ title: '隐私说明 · CheerBook 应援本', description: 'CheerBook 保存什么，什么时候会连接 LRCLIB、Cloudflare Turnstile、YouTube 与哔哩哔哩。', current: '', body, scripts: [] });
+}
+
 function editorPage(markup) {
   return layout({
     title: '制作应援 · CheerBook 应援本', current: 'editor', body: markup, wide: true,
@@ -263,7 +290,12 @@ function submitPage() {
 // reads this site's own data, and, only when the visitor asks, looks lyrics up on lrclib.net.
 const EDITOR_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src blob:; worker-src 'self'; connect-src 'self' https://lrclib.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 // Only the chart editor embeds the opt-in Turnstile script and frame. Its API stays same-origin.
-const SUBMISSION_CSP = EDITOR_CSP.replace("script-src 'self';", "script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com;");
+// It is also the only page that can show a video the visitor pasted a link to (C-016): YouTube's
+// IFrame Player API script and player, and Bilibili's player frame (two hosts: phones are sent to
+// the second). Nothing from them is in the page until the visitor chooses to load a video.
+const VIDEO_SCRIPTS = ['https://www.youtube.com'];
+const VIDEO_FRAMES = ['https://www.youtube.com', 'https://player.bilibili.com', 'https://www.bilibili.com'];
+const SUBMISSION_CSP = EDITOR_CSP.replace("script-src 'self';", `script-src 'self' https://challenges.cloudflare.com ${VIDEO_SCRIPTS.join(' ')}; frame-src https://challenges.cloudflare.com ${VIDEO_FRAMES.join(' ')};`);
 // The embedded submission page runs the challenge and posts to this site, and nothing else.
 const EMBED_CSP = "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const HEADERS = `/*
@@ -341,6 +373,7 @@ function buildSite(root, output) {
   write('index.html', homePage(entries, library, mixRecords));
   write('mix/index.html', mixPage(library, mixRecords));
   write('404.html', notFoundPage());
+  write('privacy/index.html', privacyPage());
   write('editor/index.html', editorPage(read('site/editor/page.html').toString('utf8')));
   if (fs.existsSync(path.join(root, 'site', 'editor', 'mix.html'))) write('editor/mix/index.html', mixFormPage(read('site/editor/mix.html').toString('utf8')));
   write('editor/lib.js', bundleLib(read, fs.readdirSync(path.join(root, 'lib'))));

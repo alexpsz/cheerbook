@@ -143,3 +143,58 @@ test('audio takes over from the silent clock and hands back its position', async
   audio.fire('seeked');
   assert.equal(events.length, seen);
 });
+
+test('a video player is the time, shifted by where the song starts in it', async () => {
+  const { transport, events, advance } = setup();
+  const video = {
+    time: 0, paused: true, length: 300, rate: 1, calls: [],
+    position() { return this.time; },
+    duration() { return this.length; },
+    play() { this.paused = false; this.calls.push('play'); },
+    pause() { this.paused = true; this.calls.push('pause'); },
+    seek(to) { this.time = to; this.calls.push('seek:' + to); },
+    setRate(rate) { this.rate = rate; },
+  };
+  transport.useSilent(100);
+  await transport.play();
+  advance(2);
+  transport.useVideo(video, 30);
+  assert.equal(transport.kind, 'video');
+  assert.deepEqual(events, ['play', 'pause']);
+  assert.equal(transport.ready, true);
+  assert.equal(transport.duration(), 270);
+  video.time = 12;
+  assert.equal(transport.position(), 0);
+  video.time = 42.5;
+  assert.equal(transport.position(), 12.5);
+  assert.equal(transport.videoPosition(), 42.5);
+  transport.seek(10);
+  assert.equal(video.time, 40);
+  await transport.play();
+  assert.equal(transport.paused, false);
+  transport.setRate(0.5);
+  assert.equal(video.rate, 0.5);
+  // The player reports what happened in it; the editor hears it only while the video is the source.
+  transport.notify('play');
+  transport.notify('seeked');
+  assert.deepEqual(events, ['play', 'pause', 'play', 'seeked']);
+  transport.setVideoOffset(35);
+  assert.equal(transport.videoOffset, 35);
+  assert.equal(transport.position(), 5);
+  assert.deepEqual(events, ['play', 'pause', 'play', 'seeked', 'seeked']);
+  transport.setVideoOffset(-4);
+  assert.equal(transport.videoOffset, 0);
+  // Leaving the video keeps the song position and stops the player.
+  transport.setVideoOffset(35);
+  transport.useSilent(100);
+  assert.equal(video.paused, true);
+  assert.equal(transport.kind, 'silent');
+  assert.equal(transport.position(), 5);
+  const seen = events.length;
+  transport.notify('play');
+  assert.equal(events.length, seen);
+  // A video shorter than the offset has nothing to play.
+  transport.useVideo({ ...video, duration: () => 20, position: () => 0 }, 30);
+  assert.equal(transport.ready, false);
+  assert.equal(transport.duration(), 0);
+});

@@ -117,7 +117,7 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .share-outcome { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
 .check { display: flex; gap: 8px; align-items: flex-start; }
 
-.editor[data-mode="watch"] .ed-side, .editor[data-mode="watch"] .sticks, .editor[data-mode="watch"] .grid-fix, .editor[data-mode="watch"] .metronome, .editor[data-mode="watch"] .ed-actions > :not(#toggle-mode):not(#pick-audio):not(#open-lyrics):not(#open-import) { display: none; }
+.editor[data-mode="watch"] .ed-side, .editor[data-mode="watch"] .sticks, .editor[data-mode="watch"] .grid-fix, .editor[data-mode="watch"] .metronome, .editor[data-mode="watch"] .ed-actions > :not(#toggle-mode):not(#pick-audio):not(#open-video):not(#open-lyrics):not(#open-import) { display: none; }
 .editor[data-mode="watch"] .ed-main { grid-template-columns: 1fr; }
 .editor[data-mode="watch"] .row { grid-template-columns: 6px minmax(0, 1fr); padding: 10px 24px; border-left-color: transparent; }
 .editor[data-mode="watch"] .row .time, .editor[data-mode="watch"] .row .tags, .editor[data-mode="watch"] .row.gap { display: none; }
@@ -186,3 +186,18 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .editor[data-mode="watch"][data-lyrics="none"] .row .time, .editor[data-mode="watch"][data-lyrics="none"] .row .tags { display: revert; }
 .editor[data-mode="watch"][data-lyrics="none"] .row .tags { display: flex; margin-top: 0; }
 .editor[data-mode="watch"][data-lyrics="none"] .tag { font-size: 1.15rem; padding: 4px 12px; }
+
+/* A pasted video (C-016). YouTube's terms: the player is at least 200 by 200, always in view while
+   it plays, and nothing is ever drawn over it — so the cheer band stays below, in the dock. */
+.ed-video { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-start; position: sticky; top: 8px; z-index: 2; }
+/* On a short screen the dock would sit over the player; there it joins the page instead of floating. */
+@media (max-height: 640px) {
+  .editor[data-video="frame"] { padding-bottom: 0; }
+  .editor[data-video="frame"] .ed-dock { position: static; margin: 0 -16px; }
+}
+.ed-video .video-frame { flex: 0 0 auto; width: min(100%, 400px); aspect-ratio: 16 / 9; min-width: 200px; min-height: 225px; background: #000; border-radius: 8px; overflow: hidden; }
+.ed-video .video-frame:empty { display: none; }
+.ed-video .video-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.ed-video .video-side { flex: 1 1 16em; display: grid; gap: 8px; min-width: 0; }
+.ed-video .video-status { margin: 0; }
+.editor[data-mode="watch"] #video-mark-end { display: none; }

@@ -208,3 +208,63 @@ test('a lib module that requires something outside the bundle stops the build', 
   fs.writeFileSync(path.join(root, 'lib', 'leaky.js'), "'use strict';\nmodule.exports = require('node:fs');\n");
   assert.throws(() => buildSite(root, path.join(root, '_site')), /lib\/leaky\.js 引用了包外的模块/);
 });
+
+test('only the chart editor may load a video player, from exactly the hosts the link reader names', () => {
+  const root = makeRepo({});
+  const out = path.join(root, '_site');
+  buildSite(root, out);
+  const headers = fs.readFileSync(path.join(out, '_headers'), 'utf8');
+  const policy = route => {
+    const found = new RegExp(`\\n${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n(?: {2}[^\\n]*\\n)*? {2}Content-Security-Policy: ([^\\n]*)\\n`).exec('\n' + headers);
+    assert.ok(found, route);
+    return Object.fromEntries(found[1].split(';').map(part => part.trim().split(' ')).map(([name, ...values]) => [name, values]));
+  };
+  const video = require('../lib/video.js');
+  for (const route of ['/editor/', '/editor/index.html']) {
+    const csp = policy(route);
+    assert.deepEqual(csp['script-src'], ["'self'", 'https://challenges.cloudflare.com', 'https://www.youtube.com'], route);
+    assert.deepEqual(csp['frame-src'], ['https://challenges.cloudflare.com', 'https://www.youtube.com', 'https://player.bilibili.com', 'https://www.bilibili.com'], route);
+    // Every video host allowed is one lib/video.js builds addresses for, and nothing else is.
+    const allowed = new Set([...video.YOUTUBE_FRAME_ORIGINS, ...video.BILIBILI_FRAME_ORIGINS]);
+    for (const origin of csp['frame-src'].slice(1)) assert.ok(allowed.has(origin), origin);
+    assert.deepEqual(csp['default-src'], ["'none'"]);
+    assert.deepEqual(csp['connect-src'], ["'self'", 'https://lrclib.net']);
+    assert.deepEqual(csp['frame-ancestors'], ["'none'"]);
+  }
+  // Every other page keeps its policy: no video host anywhere else.
+  const rest = headers.split('\n').filter(line => line.includes('Content-Security-Policy:') && /youtube|bilibili/.test(line));
+  assert.equal(rest.length, 2);
+  assert.doesNotMatch(policy('/*')['script-src'].join(' '), /https:/);
+  assert.equal(policy('/*')['frame-src'], undefined);
+});
+
+test('no page carries a video player, or anything of another site, before the visitor asks', () => {
+  const root = makeRepo({});
+  const out = path.join(root, '_site');
+  buildSite(root, out);
+  const page = fs.readFileSync(path.join(out, 'editor', 'index.html'), 'utf8');
+  assert.doesNotMatch(page, /<iframe|<script[^>]+src="https?:|rel="preconnect"|rel="dns-prefetch"|rel="preload"/i);
+  assert.doesNotMatch(page, /youtube\.com\/(?:embed|iframe_api)|player\.bilibili\.com/);
+  // The only address of YouTube's script is in the module that loads it on request.
+  const loader = fs.readFileSync(path.join(out, 'editor', 'youtube.js'), 'utf8');
+  assert.match(loader, /const API_SRC = 'https:\/\/www\.youtube\.com\/iframe_api';/);
+  for (const file of ['app.js', 'timesource.js', 'dom.js', 'submission.js']) {
+    assert.doesNotMatch(fs.readFileSync(path.join(out, 'editor', file), 'utf8'), /https:\/\/(?:www\.)?youtube\.com\/(?:embed|iframe_api)|https:\/\/player\.bilibili\.com/, file);
+  }
+});
+
+test('the privacy page says which services are reached and links the terms YouTube asks for', () => {
+  const root = makeRepo({});
+  const out = path.join(root, '_site');
+  buildSite(root, out);
+  const page = fs.readFileSync(path.join(out, 'privacy', 'index.html'), 'utf8');
+  assert.match(page, /YouTube API 服务/);
+  assert.match(page, /href="https:\/\/www\.youtube\.com\/t\/terms"/);
+  assert.match(page, /href="http:\/\/www\.google\.com\/policies\/privacy"/);
+  for (const name of ['LRCLIB', 'Cloudflare Turnstile', '哔哩哔哩']) assert.ok(page.includes(name), name);
+  assert.doesNotMatch(page, /<script/);
+  // Reachable from every page, and from where the video is loaded.
+  assert.match(fs.readFileSync(path.join(out, 'index.html'), 'utf8'), /<a href="\/privacy\/">隐私说明<\/a>/);
+  const editor = fs.readFileSync(path.join(out, 'editor', 'index.html'), 'utf8');
+  assert.match(editor, /id="video-consent-youtube"[^>]*>[^]*?href="https:\/\/www\.youtube\.com\/t\/terms"[^]*?href="http:\/\/www\.google\.com\/policies\/privacy"[^]*?href="\/privacy\/"/);
+});

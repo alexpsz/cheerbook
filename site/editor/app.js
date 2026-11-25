@@ -6,6 +6,7 @@
 import lib from '/editor/lib.js';
 import { setupSubmission } from '/editor/submission.js';
 import { h, clear, formatTime, formatClock, debounce, download, storage, typingTarget } from '/editor/dom.js';
+import { createTransport } from '/editor/timesource.js';
 
 const { cheer, editor: E, suggest: S, lyrics: L, messages: M, paths: P, lyricsview: V, mixes: MX } = lib;
 
@@ -16,6 +17,8 @@ const $ = id => document.getElementById(id);
 const root = $('editor');
 const audio = new Audio();
 audio.preload = 'auto';
+// The time comes from the audio file when one is chosen, otherwise from a silent clock (C-016).
+const transport = createTransport(audio);
 
 const state = {
   ed: null,
@@ -53,6 +56,17 @@ const state = {
   storageWarned: false,
   calibrating: false,
   lyricsLookup: null,
+  // The length that came with lyrics picked from an online search, until those lyrics are applied.
+  lyricsDuration: null,
+  // Whether this cheer has been edited against real audio; a cheer made on the silent clock alone
+  // is reminded to say so in its note. Unknown for a file opened from elsewhere (counts as true).
+  heard: false,
+  // The timeline row whose "add here" actions are open, as `kind:start`.
+  adding: null,
+  // Taps counted on the wall clock (no playback), and the metronome's audio context.
+  wallTaps: false,
+  // 'community' after "在网页中播放": a bar saying there is no sound, until audio is chosen or it is closed.
+  notice: null,
 };
 const DRAFT_BACKUP_KEY = 'cheerbook.editor.draft.backup.v1';
 const DISPLAY_KEY = 'cheerbook.editor.display.v1';
@@ -63,13 +77,14 @@ state.display = (() => {
 })();
 
 // ---------------------------------------------------------------------------------------------
-// Time: the audio plays in playback time; a cheer file is in cheer time (playback + offset).
+// Time: the source plays in playback time; a cheer file is in cheer time (playback + offset).
 
-const position = () => audio.currentTime || 0;
+const position = () => transport.position();
 const chart = () => state.ed.chart;
 const cheerTime = pos => pos + (chart().offset || 0);
 const playbackTime = time => time - (chart().offset || 0);
-const duration = () => (Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : chart().song.duration || 0);
+const duration = () => transport.duration() || chart().song.duration || 0;
+const hasAudio = () => transport.kind === 'audio';
 const lyricLines = () => (state.lyrics && state.lyrics.lines.filter(line => Number.isFinite(line.start))) || [];
 const lyricTexts = () => (state.lyrics ? state.lyrics.lines.map(line => line.text) : []);
 const spans = () => (lyricLines().length ? S.spans(state.lyrics) : []);
@@ -107,7 +122,7 @@ const saveDraft = debounce(() => {
   if (!state.ed) return;
   const ok = storage.set(DRAFT_KEY, {
     chart: chart(), compensation: state.ed.compensation, lyricsText: state.lyricsText, dirty: state.dirty,
-    audioName: state.audioName, member: state.member, sourcePath: state.sourcePath, sourceSha256: state.sourceSha256, grid: state.manualGrid, savedAt: new Date().toISOString(),
+    audioName: state.audioName, heard: state.heard, member: state.member, sourcePath: state.sourcePath, sourceSha256: state.sourceSha256, grid: state.manualGrid, savedAt: new Date().toISOString(),
   });
   if (!ok && !state.storageWarned) {
     state.storageWarned = true;
@@ -119,6 +134,8 @@ const saveDraft = debounce(() => {
 function changed({ save = true, panel = true } = {}) {
   if (draftSnapshot && draftSnapshot !== chart()) resetDraftLink();
   if (save) state.dirty = true;
+  if (save && hasAudio()) state.heard = true;
+  syncSource();
   check();
   renderAll({ panel });
   if (save) saveDraft();
@@ -173,7 +190,6 @@ async function loadAudio(file) {
   state.audioURL = URL.createObjectURL(file);
   state.audioName = file.name;
   audio.src = state.audioURL;
-  audio.playbackRate = Number($('rate').value) || 1;
   status(`已载入“${file.name}”，正在读取时长与节拍…`);
   const meta = await new Promise(resolve => {
     const done = () => { audio.removeEventListener('loadedmetadata', done); audio.removeEventListener('error', fail); resolve(true); };
@@ -181,8 +197,13 @@ async function loadAudio(file) {
     audio.addEventListener('loadedmetadata', done);
     audio.addEventListener('error', fail);
   });
-  if (!meta) { status('这个文件无法在浏览器里播放。请换成 MP3、AAC / M4A、FLAC、WAV 或 Ogg 文件。', true); return; }
-  root.dataset.ready = 'true';
+  if (!meta) {
+    status('这个文件无法在浏览器里播放。请换成 MP3、AAC / M4A、FLAC、WAV 或 Ogg 文件。', true);
+    if (!hasAudio()) dropAudio({ quiet: true });
+    return;
+  }
+  transport.useAudio();
+  transport.setRate(Number($('rate').value) || 1);
   const song = chart().song;
   const guess = guessSong(file.name);
   const edits = {};
@@ -195,9 +216,7 @@ async function loadAudio(file) {
   }
   if (Object.keys(edits).length) updateSong(edits, 'song');
   if (mismatch) status(mismatch, true);
-  for (const id of ['play', 'seek']) $(id).disabled = false;
-  $('seek').max = String(audio.duration);
-  $('grid-set').hidden = false;
+  syncSource();
   renderAll();
   analyseBeat(file);
 }
@@ -209,11 +228,103 @@ function guessSong(name) {
   return parts.length === 2 ? { artist: parts[0].trim(), title: parts[1].trim() } : { title: base };
 }
 
+/** Leaves the audio file for the silent clock ("切回无声"), or clears a file that would not load. */
+function dropAudio({ quiet = false } = {}) {
+  if (state.worker) { state.worker.terminate(); state.worker = null; }
+  state.analysisRun++;
+  // The clock takes over from where the audio was, so it is asked before the file is let go.
+  transport.useSilent(chart().song.duration || 0);
+  if (state.audioURL) URL.revokeObjectURL(state.audioURL);
+  state.audioURL = null;
+  state.audioName = '';
+  state.autoGrid = null;
+  audio.removeAttribute('src');
+  audio.load();
+  syncSource();
+  frame(true);
+  if (!quiet) status('已切回无声计时：页面自己计时，没有声音。', true);
+}
+
+// Without an audio file the silent clock plays the song's own length, so a cheer with a length can
+// be played at once. The controls follow whichever source is in use.
+let sourceKey = '';
+function syncSource() {
+  if (!state.ed) return;
+  if (!hasAudio()) {
+    const length = chart().song.duration || 0;
+    if (transport.kind !== 'silent' || transport.duration() !== length) transport.useSilent(length);
+  }
+  const ready = transport.ready;
+  const key = [transport.kind, ready, duration(), state.notice, !!state.lyrics].join(':');
+  if (key === sourceKey) return;
+  sourceKey = key;
+  for (const id of ['play', 'seek']) $(id).disabled = !ready;
+  $('seek').max = String(duration());
+  $('grid-set').hidden = !ready;
+  $('source').hidden = !ready;
+  $('source').textContent = hasAudio() ? '本地音频' : '无声计时';
+  $('source-silent').hidden = !hasAudio();
+  $('song-duration').readOnly = hasAudio();
+  $('notice').hidden = !(state.notice && !hasAudio() && ready);
+  root.dataset.ready = String(ready || !!state.lyrics);
+  // A tempo typed or tapped for the silent clock comes back with the draft, as one for a file does.
+  if (!hasAudio() && ready && !state.grid && typedForThisAudio()) {
+    const typed = S.gridFromBPM(state.manualGrid.bpm, state.manualGrid.anchor, duration());
+    if (typed) setGrid(typed, handNote(typed));
+  }
+}
+
+function setMode(watching) {
+  dropHeld('已取消正在记录的这一下。');
+  root.dataset.mode = watching ? 'watch' : 'edit';
+  $('toggle-mode').setAttribute('aria-pressed', String(watching));
+  $('toggle-mode').textContent = watching ? '回到编辑' : '观看模式';
+  state.adding = null;
+  renderTimeline();
+}
+
+// 节拍提示音: a tick on each beat of the grid while the clock runs, so a tempo typed or tapped
+// without audio can be checked by ear. It is synthesised here; nothing is loaded.
+const click = {
+  on: false, context: null, next: null,
+  reset() { this.next = null; },
+  enable(on) {
+    this.on = on;
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (on && !this.context && Context) this.context = new Context();
+    if (on && this.context && this.context.state === 'suspended') this.context.resume();
+    this.reset();
+  },
+  tick(pos) {
+    const grid = state.grid, context = this.context;
+    if (!this.on || !context || !grid || transport.paused) return;
+    const rate = Number($('rate').value) || 1;
+    // Beats in the next 0.15 s of real time are handed to the audio clock, which keeps them even.
+    const horizon = pos + 0.15 * rate;
+    let index = this.next ?? Math.ceil((pos - grid.anchor) / grid.beat - 1e-6);
+    for (; grid.anchor + index * grid.beat <= horizon; index++) {
+      const at = grid.anchor + index * grid.beat;
+      if (at < pos - 0.02) continue;
+      const when = context.currentTime + Math.max(0, (at - pos) / rate);
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.frequency.value = ((index % 4) + 4) % 4 === 0 ? 1320 : 880;
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(0.25, when + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.06);
+      osc.connect(gain).connect(context.destination);
+      osc.start(when);
+      osc.stop(when + 0.08);
+    }
+    this.next = index;
+  },
+};
+
 async function analyseBeat(file) {
   const run = ++state.analysisRun;
   state.autoGrid = null;
   // Called once the metadata is in, so the length is known.
-  const typed = typedForThisAudio() ? S.gridFromBPM(state.manualGrid.bpm, state.manualGrid.anchor, audio.duration) : null;
+  const typed = typedForThisAudio() ? S.gridFromBPM(state.manualGrid.bpm, state.manualGrid.anchor, duration()) : null;
   const kept = typed || (state.grid && state.grid.source === 'taps' ? state.grid : null);
   setGrid(kept, kept ? handNote(kept, '（正在分析…）') : '节拍：正在分析…');
   if (state.worker) { state.worker.terminate(); state.worker = null; }
@@ -291,6 +402,10 @@ function setGrid(grid, note) {
   $('grid-status').textContent = note;
   for (const id of ['grid-double', 'grid-half', 'grid-shift']) $(id).hidden = !grid;
   $('mix-hint').textContent = grid ? '点一下插入到当前位置，对齐到下一拍。' : '点一下插入到当前位置。';
+  $('metronome').disabled = !grid;
+  $('metronome-row').title = grid ? '按当前 BPM 打拍，只有嘀嘀声，不是歌。' : '设置或跟拍估出 BPM 后可开启（只有嘀嘀声）。';
+  if (!grid && click.on) { click.enable(false); $('metronome').checked = false; }
+  click.reset();
   state.suggestions = null;
   $('suggest').textContent = '✦ 推荐';
   // The analysis can finish while the beat dialog is open.
@@ -318,14 +433,14 @@ function adjustGrid(kind) {
 // recording whose first beat is not at 0:00, or a tempo the estimator halves or doubles.
 
 /** Whether the remembered typed grid is for the loaded audio: same file name and length. */
-const typedForThisAudio = () => !!state.manualGrid && state.manualGrid.audioName === state.audioName && Math.abs(state.manualGrid.duration - audio.duration) <= 0.5;
-const audioKnown = () => Number.isFinite(audio.duration) && audio.duration > 0;
+const typedForThisAudio = () => !!state.manualGrid && state.manualGrid.audioName === state.audioName && Math.abs(state.manualGrid.duration - duration()) <= 0.5;
+const audioKnown = () => duration() > 0;
 /** One of the grid's bar lines inside the recording: its own, or else the first after 0:00 (after many "移一拍"). */
 const barLineInside = grid => (grid.anchor >= 0 && grid.anchor <= duration() ? grid.anchor : Math.max(0, S.barLine(grid, 0)));
 
 /** Remembers (or with null forgets) the typed grid for the loaded audio, with the draft. */
 function rememberManualGrid(grid) {
-  state.manualGrid = grid ? { bpm: grid.bpm, anchor: barLineInside(grid), audioName: state.audioName, duration: audio.duration } : null;
+  state.manualGrid = grid ? { bpm: grid.bpm, anchor: barLineInside(grid), audioName: state.audioName, duration: duration() } : null;
   saveDraft();
 }
 
@@ -334,7 +449,7 @@ function syncGridRestore() {
 }
 
 function openGridDialog() {
-  if (!state.audioURL || !audioKnown()) { status('先选择能播放的音频，再设置 BPM 与起拍偏移。', true); return; }
+  if (!audioKnown()) { status('先填写歌曲时长或选择本地音频，再设置 BPM 与起拍偏移。', true); return; }
   const grid = state.grid;
   $('grid-bpm').value = grid ? String(Math.round(grid.bpm * 100) / 100) : '';
   $('grid-anchor').value = String(Math.round((grid ? barLineInside(grid) : 0) * 1000) / 1000);
@@ -348,7 +463,7 @@ function openGridDialog() {
 
 /** The current position for the first bar line; a click while playing lands late, as taps do. */
 function gridAnchorHere() {
-  const at = position() - (audio.paused ? 0 : state.ed.compensation);
+  const at = position() - (transport.paused ? 0 : state.ed.compensation);
   $('grid-anchor').value = String(Math.round(Math.max(0, at) * 1000) / 1000);
 }
 
@@ -372,15 +487,16 @@ function restoreAutoGrid() {
 }
 
 function togglePlay() {
-  if (!state.audioURL) { pickAudio(); return; }
-  if (audio.paused) audio.play().catch(() => status('浏览器没有允许播放，请再点一次播放。', true));
-  else audio.pause();
+  if (!transport.ready) { status('还不知道这首歌多长：在上方填“时长”，在“歌词…”里在线查找，或选择本地音频。', true); return; }
+  if (transport.paused) transport.play().catch(() => status('浏览器没有允许播放，请再点一次播放。', true));
+  else transport.pause();
 }
 
 function seek(to) {
-  if (!state.audioURL) return;
+  if (!transport.ready) return;
   follow.manualAt = -Infinity;
-  audio.currentTime = Math.min(Math.max(0, to), duration());
+  transport.seek(Math.min(Math.max(0, to), duration()));
+  click.reset();
   frame(true);
 }
 
@@ -390,9 +506,9 @@ let rafId = 0;
 function loop() {
   rafId = 0;
   frame();
-  if (!audio.paused) rafId = requestAnimationFrame(loop);
+  if (!transport.paused) rafId = requestAnimationFrame(loop);
 }
-function startLoop() { if (!rafId && !audio.paused) rafId = requestAnimationFrame(loop); }
+function startLoop() { if (!rafId && !transport.paused) rafId = requestAnimationFrame(loop); }
 
 function frame(force = false, { reposition = true } = {}) {
   const pos = position();
@@ -400,21 +516,22 @@ function frame(force = false, { reposition = true } = {}) {
   if (!$('seek').matches(':active')) $('seek').value = String(pos);
   renderBand(pos);
   renderBeatDot(pos);
+  click.tick(pos);
   syncFocus(pos, { force, reposition });
   updateFill(pos);
   if (state.held.size) renderHeldTags(pos);
 }
 
-audio.addEventListener('play', () => { $('play').textContent = '暂停'; frame(true); startLoop(); });
-audio.addEventListener('pause', () => { $('play').textContent = '播放'; frame(true); });
-audio.addEventListener('ended', () => { $('play').textContent = '播放'; });
-audio.addEventListener('seeked', () => frame(true));
+transport.on('play', () => { $('play').textContent = '暂停'; click.reset(); frame(true); startLoop(); });
+transport.on('pause', () => { $('play').textContent = '播放'; click.reset(); frame(true); });
+transport.on('ended', () => { $('play').textContent = '播放'; });
+transport.on('seeked', () => { click.reset(); frame(true); });
 
 /** A dot that lights on each beat (brighter on bar lines), to check the grid by ear and eye. */
 function renderBeatDot(pos) {
   const dot = $('beat-dot');
   const grid = state.grid;
-  if (!grid || audio.paused) { dot.dataset.on = 'off'; return; }
+  if (!grid || transport.paused) { dot.dataset.on = 'off'; return; }
   const sinceBeat = ((pos - grid.anchor) % grid.beat + grid.beat) % grid.beat;
   const beatIndex = Math.round((pos - grid.anchor - sinceBeat) / grid.beat);
   dot.dataset.on = sinceBeat < 0.12 ? (((beatIndex % 4) + 4) % 4 === 0 ? 'bar' : 'beat') : 'off';
@@ -433,8 +550,11 @@ function stickKeys() {
 
 function press(stick, via = { pointer: true }) {
   if (root.dataset.mode === 'watch' || state.held.has(stick.id)) return;
-  if (!state.audioURL) { status('先选择本地音频，再边听边点。', true); return; }
+  if (!transport.ready) { status('先填写歌曲时长或选择本地音频，再打点。', true); return; }
   const pos = position();
+  // The clock is not running (no audio, or paused): nothing to hold against, so the cheer goes
+  // down at this very position with its default length, and no reaction time is taken off.
+  if (transport.paused) { placeAt(stick.key === 'mix' || stick.key === 'call' || stick.key === 'note' ? stick.key : 'part', pos, NaN, { member: stick.key.member }); return; }
   state.ed.press(stick.key, pos);
   state.held.set(stick.id, { stick, start: pos, code: via.code || null });
   const button = document.querySelector(`[data-stick="${CSS.escape(stick.id)}"]`);
@@ -456,6 +576,48 @@ function release(stick) {
   const event = chart().events[index];
   status(`已记录 ${describe(event)} · ${formatTime(playbackTime(event.start))}–${formatTime(playbackTime(event.end))}`, true);
   changed();
+}
+
+/** Puts a cheer down at a position rather than by holding a key: from a lyric row, or with the clock stopped. */
+function placeAt(kind, start, end, { member = null, echo = false } = {}) {
+  if (kind === 'part') {
+    if (!chart().members.length) { status('请先在右侧“成员”栏添加成员，再标记演唱段落。', true); return; }
+    member = member || state.member || chart().members[0].id;
+  } else if (kind === 'mix') member = state.member;
+  else member = null;
+  const index = state.ed.place(kind, start, end, { member, echo });
+  if (index === null || index === undefined) { status('这里放不下：不在歌曲范围内。', true); return; }
+  state.selected = index;
+  state.fresh = index;
+  state.adding = null;
+  const event = chart().events[index];
+  const fill = event.kind === 'part' || event.echo ? '' : '在“这一条”里填写内容。';
+  status(`已添加 ${describe(event)} · ${formatTime(playbackTime(event.start))}。${fill}`, true);
+  changed();
+}
+
+/** What can be put on a lyric line or on a stretch nobody sings, without playing through it. */
+function rowActions(row) {
+  const start = row.start, end = row.end;
+  const act = (label, run) => h('button', { type: 'button', onclick: event => { event.stopPropagation(); run(); } }, label);
+  if (row.kind === 'line') return [
+    act('标演唱', () => placeAt('part', start, end)),
+    act('标跟唱', () => placeAt('call', start, end, { echo: true })),
+    act('句前 Call', () => placeAt('call', Math.max(0, start - 1), start)),
+    act('句后 Call', () => placeAt('call', end, end + 1)),
+    act('加提示', () => placeAt('note', start, start + 1)),
+  ];
+  return [
+    act('插入 MIX…', () => {
+      state.adding = null;
+      seek(start);
+      renderTimeline();
+      $('mix-title').scrollIntoView({ block: 'nearest' });
+      status('已定位到这段空位：在“MIX”栏点一条插入。', true);
+    }),
+    act('加 Call', () => placeAt('call', start, start + 1)),
+    act('加提示', () => placeAt('note', start, start + 1)),
+  ];
 }
 
 /** Drops every hold without recording it (Escape, or the window losing focus mid-hold). */
@@ -524,6 +686,15 @@ function buildRows() {
     const where = place(ghost.at);
     (where.line !== undefined ? lineRows[where.line] : gapRow(where.gapBefore)).ghosts.push(ghost);
   }
+  // While editing, a stretch nobody sings has a row even when it is empty, so a cheer can be put there.
+  if (root.dataset.mode !== 'watch') {
+    for (const gap of S.gaps(state.lyrics, duration(), state.grid)) {
+      const next = lines.findIndex(line => line.start >= gap.end - 0.05);
+      const row = gapRow(next === -1 ? lines.length : next);
+      row.start = gap.start;
+      row.end = gap.end;
+    }
+  }
   for (const [before, row] of gapRows) lineRows.splice(lineRows.findIndex(r => r.kind === 'line' && r.lineIndex === before) === -1 ? lineRows.length : lineRows.findIndex(r => r.kind === 'line' && r.lineIndex === before), 0, row);
   for (const row of lineRows) row.events.sort((a, b) => a.at - b.at);
   return lineRows;
@@ -539,20 +710,29 @@ function renderTimeline() {
   clear(list);
   rows = buildRows();
   $('timeline-empty').hidden = rows.length > 0;
+  const watching = root.dataset.mode === 'watch';
+  root.dataset.lyrics = lyricLines().length ? 'timed' : 'none';
+  $('watch-note').hidden = !(watching && !lyricLines().length && rows.length > 0);
   const singers = singersByLine();
   rows.forEach((row, i) => {
     const tags = h('div', { class: 'tags' },
       row.events.map(item => eventTag(item)),
       row.ghosts.map(ghost => ghostTag(ghost)));
+    const addKey = `${row.kind}:${row.start}`;
+    const canAdd = !watching && row.kind !== 'event' && transport.ready;
+    const open = canAdd && state.adding === addKey;
+    const actions = open ? h('div', { class: 'row-actions', role: 'group', 'aria-label': '在这里添加' }, rowActions(row)) : null;
     const body = row.kind === 'line'
-      ? h('div', { class: 'body' }, lineText(row.line), tags)
-      : h('div', { class: 'body' }, row.kind === 'gap' ? h('div', { class: 'text' }, gapLabel(row)) : null, tags);
+      ? h('div', { class: 'body' }, lineText(row.line), tags, actions)
+      : h('div', { class: 'body' }, row.kind === 'gap' ? h('div', { class: 'text' }, gapLabel(row)) : null, tags, actions);
+    const add = canAdd ? h('button', { type: 'button', class: 'row-add', 'aria-expanded': String(open), 'aria-label': '在这里添加应援', title: '在这里添加',
+      onclick: event => { event.stopPropagation(); state.adding = open ? null : addKey; renderTimeline(); } }, '＋') : null;
     const bars = h('span', { class: 'singers', 'aria-hidden': 'true' },
       (row.kind === 'line' ? singers.get(row.lineIndex) || [] : []).map(color => h('i', { style: { '--member': color } })));
     const label = row.kind === 'line' ? `${formatTime(row.start)} ${row.line.text}` : gapLabel(row);
     list.append(h('li', { class: `row ${row.kind}`, dataset: { row: String(i) }, tabindex: '-1', 'aria-label': label,
-      onclick: event => { if (!event.target.closest('.tag')) { follow.manualAt = -Infinity; seek(row.start); } } },
-    h('span', { class: 'time' }, formatTime(row.start)), bars, body));
+      onclick: event => { if (!event.target.closest('.tag, .row-actions, .row-add')) { follow.manualAt = -Infinity; seek(row.start); } } },
+    h('span', { class: 'time' }, formatTime(row.start)), bars, body, add));
   });
   if (box) box.scrollTop = keep;
   follow.focus = null;
@@ -656,7 +836,7 @@ function syncFocus(pos, { force = false, reposition = true } = {}) {
   if (!box) return;
   const target = node ? V.anchorScroll(node.offsetTop, box.clientHeight) : 0;
   // A rebuild or a long jump re-anchors at once; a line change while playing moves on the spring.
-  const animated = !force && !reducedMotion() && !audio.paused && Math.abs(target - box.scrollTop) < box.clientHeight * 2;
+  const animated = !force && !reducedMotion() && !transport.paused && Math.abs(target - box.scrollTop) < box.clientHeight * 2;
   moveList(box, target, focus, animated);
 }
 
@@ -758,7 +938,7 @@ function renderBand(pos) {
   if (!state.ed) return;
   const view = E.bandItems(chart(), cheerTime(pos), { lead: BAND_LEAD, library: state.library, lyrics: state.lyrics, increasedContrast: increasedContrast() });
   // Rebuilt only when what it shows changes, not on every frame.
-  const key = JSON.stringify([view, !!state.audioURL, state.display]);
+  const key = JSON.stringify([view, transport.ready, state.display]);
   if (key === bandKey) return;
   bandKey = key;
   clear(band);
@@ -784,7 +964,7 @@ function renderBand(pos) {
     band.append(h('span', { class: 'next' }, '下一条：', view.upcoming.title || view.upcoming.text || ''),
       view.countdown !== null ? h('span', { class: 'count' }, view.imminent ? String(view.countdown) : `${view.countdown} 秒后`) : null);
   }
-  if (!band.childNodes.length) band.append(h('span', { class: 'idle' }, state.audioURL ? '这里会显示正在进行的应援和下一条。' : '选择本地音频后开始。'));
+  if (!band.childNodes.length) band.append(h('span', { class: 'idle' }, transport.ready ? '这里会显示正在进行的应援和下一条。' : '填写时长或选择本地音频后开始。'));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -923,7 +1103,7 @@ function renderLibrary() {
 }
 
 function insertMix(entry) {
-  if (!state.audioURL) { status('先选择本地音频，MIX 会插入到当前播放位置。', true); return; }
+  if (!transport.ready) { status('先填写歌曲时长或选择本地音频，MIX 会插入到当前位置。', true); return; }
   const member = state.member || (entry.text.includes('{name}') && chart().members[0] ? chart().members[0].id : null);
   const result = S.insertMix(chart(), entry, position(), state.grid, member, { spans: spans() });
   if (!result || result.index === null || result.index === undefined) { status('这里放不下这条 MIX（会超出歌曲或与别的 MIX 重叠），换个位置再试。', true); return; }
@@ -971,7 +1151,7 @@ function releaseIfPointer(stick) {
 
 function computeSuggestions() {
   if (!lyricLines().length) { status('智能推荐要用到带时间的歌词：先在“歌词…”里加载 LRC。', true); return; }
-  if (!duration()) { status('先选择本地音频。', true); return; }
+  if (!duration()) { status('先填写歌曲时长或选择本地音频。', true); return; }
   state.suggestions = S.suggestions(state.lyrics, duration(), state.grid, chart(), state.library, { extra: artistEntries() });
   state.dismissed.clear();
   state.choices.clear();
@@ -1029,7 +1209,7 @@ function syncSongFields() {
   for (const [id, key] of [['song-title', 'title'], ['song-artist', 'artist'], ['song-album', 'album'], ['song-isrc', 'isrc'], ['song-amid', 'appleMusicID']]) {
     if (document.activeElement !== $(id)) $(id).value = song[key] || '';
   }
-  $('song-duration').textContent = song.duration ? `时长 ${formatClock(song.duration)}` : '';
+  if (document.activeElement !== $('song-duration')) $('song-duration').value = song.duration ? formatClock(song.duration) : '';
   $('offset').value = String(chart().offset || 0);
   $('compensation').value = String(state.ed.compensation);
 }
@@ -1050,6 +1230,8 @@ function updateSong(patch, coalescing) {
 function openLyrics() {
   $('lyrics-text').value = state.lyricsText;
   $('lyrics-result').textContent = '';
+  state.lyricsDuration = null;
+  renderCandidates(null);
   $('lyrics-dialog').returnValue = '';
   $('lyrics-dialog').showModal();
 }
@@ -1069,15 +1251,48 @@ function applyLyrics(text) {
       if (Object.keys(patch).length) updateSong(patch, 'song');
     }
   }
+  // With no audio and no length yet, the length comes with the lyrics: the record picked online,
+  // the file's own length tag, or a guess from its last line that the maker should check.
+  let lengthNote = '';
+  if (state.lyrics && !chart().song.duration && !hasAudio()) {
+    const picked = state.lyricsDuration && state.lyricsDuration.text === text ? state.lyricsDuration.duration : null;
+    const guess = picked ? { duration: picked, source: 'picked' } : lyricLines().length ? L.durationFromLyrics(state.lyrics) : null;
+    if (guess) {
+      updateSong({ duration: guess.duration }, 'song');
+      lengthNote = guess.source === 'lastLine' ? `歌曲时长按最后一句估为 ${formatClock(guess.duration)}，请在上方“时长”里核对。` : `歌曲时长设为 ${formatClock(guess.duration)}。`;
+    }
+  }
+  state.lyricsDuration = null;
   state.suggestions = null;
   changed();
   const count = state.lyrics ? state.lyrics.lines.length : 0;
-  status(count ? `已加载 ${count} 行歌词${lyricLines().length ? '' : '（没有时间，只能显示）'}。` : '已清除歌词。', true);
+  status(count ? `已加载 ${count} 行歌词${lyricLines().length ? '' : '（没有时间，只能显示）'}。${lengthNote}` : '已清除歌词。', true);
+}
+
+/** The records an online search found when the song's length is not known yet; picking one fills the box. */
+function renderCandidates(list) {
+  const box = $('lyrics-candidates');
+  clear(box);
+  $('lyrics-candidates-note').hidden = !(list && list.length);
+  if (!list) return;
+  for (const found of list) {
+    const parts = [found.title, found.artist, found.album, found.duration ? formatClock(found.duration) : '时长未知', found.synced ? '带时间' : '无时间'].filter(Boolean);
+    box.append(h('li', {}, h('button', { type: 'button', onclick: () => {
+      const record = L.fromLRCLIB(found.record);
+      const text = record.synced || record.plain || '';
+      $('lyrics-text').value = text;
+      state.lyricsDuration = found.duration ? { duration: found.duration, text } : null;
+      const length = found.duration ? `时长 ${formatClock(found.duration)}` : '时长未知';
+      $('lyrics-result').textContent = found.synced
+        ? `已填入带时间的歌词（${length}），确认后点“使用这些歌词”。`
+        : `已填入纯文本歌词（不含时间，${length}），不能用来按句对时间；确认后点“使用这些歌词”。`;
+    } }, parts.join(' · '))));
+  }
 }
 
 async function lookupLyrics() {
   const song = chart().song;
-  if (!song.title || !song.artist) { $('lyrics-result').textContent = '先填写歌名和艺人。'; return; }
+  if (!song.title || !song.artist) { $('lyrics-result').textContent = '请先在页面上方填写歌名和艺人。'; return; }
   // As Liveglow does: no album in the exact lookup (catalogues name albums differently), then a
   // search by title with the same matching rule as cheer files (spec §8).
   const query = { title: song.title, artist: song.artist, duration: duration() || song.duration };
@@ -1087,7 +1302,20 @@ async function lookupLyrics() {
   state.lyricsLookup = lookup;
   const before = $('lyrics-text').value;
   const options = { referrerPolicy: 'no-referrer', signal: lookup.signal, credentials: 'omit' };
+  renderCandidates(null);
   try {
+    // Without a length there is nothing to match a recording by, so the maker picks from what the
+    // search finds; the pick brings its length along.
+    if (!(query.duration > 0)) {
+      const searchURL = L.lrclibSearchURL({ title: song.title, artist: song.artist });
+      const search = searchURL ? await fetch(searchURL, options) : null;
+      const list = search && search.ok ? L.lrclibCandidates(await search.json()) : [];
+      if (lookup.signal.aborted) return;
+      renderCandidates(list);
+      $('lyrics-result').textContent = !list.length ? '没有找到这首歌的歌词。可以粘贴或导入 LRC，或手填歌曲时长后用无声计时打点。'
+        : list.some(found => found.synced) ? '' : '没有找到带时间的歌词。可以粘贴或导入 LRC，或手填歌曲时长后用无声计时打点。';
+      return;
+    }
     let record = null;
     const exactURL = L.lrclibGetURL(query);
     if (exactURL) {
@@ -1126,12 +1354,15 @@ function importCheer(bytes, source, { path = null, sha256 = null } = {}) {
   backUpDraft();
   state.sourcePath = path;
   state.sourceSha256 = sha256;
+  // How a file from elsewhere was made is not known; only a cheer started here is asked about it.
+  state.heard = true;
+  state.notice = null;
   useChart(result.chart);
   state.dirty = false;
   saveDraft();
   const song = chart().song;
   const playing = { title: song.title, artist: song.artist, duration: audio.duration };
-  const mismatch = state.audioURL && audio.duration && !cheer.matchSong({ title: song.title, artist: song.artist, duration: song.duration }, playing);
+  const mismatch = hasAudio() && audio.duration && !cheer.matchSong({ title: song.title, artist: song.artist, duration: song.duration }, playing);
   const notes = result.warnings.length ? ' ' + result.warnings.map(M.issueMessage).join(' ') : '';
   status(`已打开${source}（${chart().events.length} 条应援）。${mismatch ? '注意：时长和当前音频对不上，可能不是同一个录音版本。' : ''}${notes}`, true);
   return true;
@@ -1142,10 +1373,14 @@ function fileName(song, suffix = '') {
   return `${base}${suffix}.cheer.json`;
 }
 
+/** A cheer made here without ever hearing the song, and not yet saying so in its note. */
+const unheard = () => !state.heard && chart().events.length > 0 && !(chart().credits.note || '').trim();
+const UNHEARD_NOTE = '凭记忆与歌词时间制作，未对着音频校对，在映场播放时可能需要微调偏移。';
+
 function saveLocal() {
   download(fileName(chart().song), E.serialize(chart()));
   markExported();
-  status('已保存到本机下载文件夹。这份文件可以在映场里“导入…”。', true);
+  status(`已保存到本机下载文件夹。这份文件可以在映场里“导入…”。${unheard() ? '这份应援还没有对着音频校对过，可以在“分享 / 投稿”里填写制作说明。' : ''}`, true);
 }
 
 // CheerEditor replaces its immutable chart on edits. A completed copy is usable only while
@@ -1212,6 +1447,7 @@ function shareTarget(prepared) {
 }
 
 function renderShare() {
+  $('share-unheard').hidden = !unheard();
   const choice = shareChoice();
   $('share-referenced').hidden = choice.kind !== 'referenced';
   const author = $('share-author').value.trim();
@@ -1285,19 +1521,38 @@ async function submitShareOnGitHub() {
 // ---------------------------------------------------------------------------------------------
 // Tap tempo and reaction calibration.
 
+function syncTapButton() {
+  $('tap-tempo').textContent = state.taps && state.taps.length ? `继续敲（${state.taps.length} / 8）` : '跟拍 8 下估 BPM';
+}
+
 function tapTempo() {
-  if (!state.audioURL || audio.paused) { status('边播放边跟着鼓点按 T（或点“跟拍 8 下”），连按 8 下。', true); return; }
+  const playing = transport.ready && !transport.paused;
+  if (!playing && !(duration() > 0)) { status('先填写歌曲时长或选择本地音频，再跟拍。', true); return; }
+  // Without playback the taps are timed on the wall clock: they give the tempo, not where a bar starts.
+  const now = performance.now() / 1000;
+  if (state.taps && (state.wallTaps === playing || (!playing && now - state.taps[state.taps.length - 1] > 3))) state.taps = null;
   state.taps = state.taps || [];
-  // Taps land late by the listener's reaction time, as the sticks do.
-  state.taps.push(position() - state.ed.compensation);
-  if (state.taps.length < 8) { status(`跟拍 ${state.taps.length} / 8`, true); return; }
-  const grid = S.gridFromTaps(state.taps);
+  state.wallTaps = !playing;
+  // Taps along with playback land late by the listener's reaction time, as the sticks do.
+  state.taps.push(playing ? position() - state.ed.compensation : now);
+  if (state.taps.length < 8) { syncTapButton(); status(playing ? `跟拍 ${state.taps.length} / 8` : `跟着心里的节奏，连点按钮或按 T 键 8 下（${state.taps.length} / 8）。`, true); return; }
+  const found = S.gridFromTaps(state.taps);
   state.taps = null;
+  syncTapButton();
+  if (!found) { status('跟拍不太稳，没能估出速度，再试一次。', true); return; }
+  if (playing) {
+    // The taps replace a grid typed in for this recording.
+    if (typedForThisAudio()) rememberManualGrid(null);
+    setGrid(found, `节拍：${Math.round(found.bpm)} BPM · 跟拍`);
+    status(`已按跟拍对齐：${Math.round(found.bpm)} BPM。`, true);
+    return;
+  }
+  const first = lyricLines()[0];
+  const grid = S.gridFromBPM(Math.round(found.bpm * 10) / 10, first ? Math.min(first.start, duration()) : 0, duration());
   if (!grid) { status('跟拍不太稳，没能估出速度，再试一次。', true); return; }
-  // The taps replace a grid typed in for this recording.
-  if (typedForThisAudio()) rememberManualGrid(null);
-  setGrid(grid, `节拍：${Math.round(grid.bpm)} BPM · 跟拍`);
-  status(`已按跟拍对齐：${Math.round(grid.bpm)} BPM。`, true);
+  rememberManualGrid(grid);
+  setGrid(grid, `节拍：${bpmText(grid)} BPM · 跟拍`);
+  status(`已按跟拍设为 ${bpmText(grid)} BPM。小节线暂时对在${first ? '第一句歌词' : ' 0:00'}，可以在“BPM 与起拍偏移…”里改。`, true);
 }
 
 async function calibrate() {
@@ -1411,7 +1666,7 @@ function wire() {
   $('audio-file').addEventListener('change', e => { loadAudio(e.target.files[0]); e.target.value = ''; });
   $('play').addEventListener('click', togglePlay);
   $('seek').addEventListener('input', e => seek(Number(e.target.value)));
-  $('rate').addEventListener('change', e => { audio.playbackRate = Number(e.target.value) || 1; });
+  $('rate').addEventListener('change', e => { transport.setRate(Number(e.target.value) || 1); click.reset(); });
   $('undo').addEventListener('click', undo);
   $('redo').addEventListener('click', redo);
   $('suggest').addEventListener('click', computeSuggestions);
@@ -1423,12 +1678,27 @@ function wire() {
   $('grid-auto').addEventListener('click', restoreAutoGrid);
   $('grid-dialog').addEventListener('close', () => { if ($('grid-dialog').returnValue === 'apply') applyGridDialog(); });
   $('save-local').addEventListener('click', saveLocal);
-  $('toggle-mode').addEventListener('click', () => {
-    const watching = root.dataset.mode !== 'watch';
-    dropHeld('已取消正在记录的这一下。');
-    root.dataset.mode = watching ? 'watch' : 'edit';
-    $('toggle-mode').setAttribute('aria-pressed', String(watching));
-    $('toggle-mode').textContent = watching ? '回到编辑' : '观看模式';
+  $('toggle-mode').addEventListener('click', () => setMode(root.dataset.mode !== 'watch'));
+  $('source-silent').addEventListener('click', () => dropAudio());
+  $('notice-audio').addEventListener('click', pickAudio);
+  $('notice-close').addEventListener('click', () => { state.notice = null; syncSource(); });
+  $('metronome').addEventListener('change', e => click.enable(e.target.checked));
+  for (const node of document.querySelectorAll('[data-start]')) {
+    node.addEventListener('click', () => {
+      if (node.dataset.start === 'audio') pickAudio();
+      else if (node.dataset.start === 'lyrics') openLyrics();
+      else $('song-duration').focus();
+    });
+  }
+  $('song-duration').addEventListener('change', e => {
+    if (hasAudio()) return;
+    const text = e.target.value.trim();
+    const shown = chart().song.duration ? formatClock(chart().song.duration) : '';
+    if (text === shown) return;
+    const seconds = E.parseDuration(text);
+    if (seconds === null) { status('请按 分:秒 填写，例如 3:45。', true); e.target.value = shown; return; }
+    updateSong({ duration: seconds }, 'song:duration');
+    status(`歌曲时长设为 ${formatClock(seconds)}。可以点“播放”无声计时，或在“歌词…”里加载歌词。`, true);
   });
   for (const [id, key] of [['song-title', 'title'], ['song-artist', 'artist'], ['song-album', 'album'], ['song-isrc', 'isrc'], ['song-amid', 'appleMusicID']]) {
     const apply = e => updateSong({ [key]: e.target.value.trim() ? e.target.value : '' }, 'song:' + key);
@@ -1487,7 +1757,7 @@ function wire() {
   measureLyrics();
   new ResizeObserver(measureLyrics).observe(box);
   window.addEventListener('resize', measureLyrics);
-  $('tap-tempo').addEventListener('click', () => { $('more-dialog').close(); tapTempo(); });
+  $('tap-tempo').addEventListener('click', tapTempo);
   $('grid-open').addEventListener('click', () => { $('more-dialog').close(); openGridDialog(); });
   $('sort-events').addEventListener('click', () => { state.ed.sortEvents(); state.selected = null; changed(); });
   $('new-chart').addEventListener('click', () => {
@@ -1496,6 +1766,8 @@ function wire() {
     state.dirty = false;
     state.sourcePath = null;
     state.sourceSha256 = null;
+    state.heard = hasAudio();
+    state.notice = null;
     useChart(newChart({ title: chart().song.title, artist: chart().song.artist, duration: duration() }));
     $('more-dialog').close();
     status('已新建空白应援。', true);
@@ -1526,11 +1798,27 @@ function wire() {
     }
     document.querySelector(`input[name="origin"][value="${source.kind === 'selfMade' ? 'self' : 'referenced'}"]`).checked = true;
     $('share-link').value = source.link || '';
+    $('share-note').value = credits.note || '';
     document.querySelector(`input[name="consent"][value="${source.consented ? 'yes' : 'unsure'}"]`).checked = true;
     renderShare();
     $('share-dialog').showModal();
   });
   for (const input of document.querySelectorAll('#share-dialog input')) input.addEventListener('input', renderShare);
+  const setNote = text => {
+    state.ed.edit(draft => {
+      if (text.trim()) draft.credits.note = text;
+      else delete draft.credits.note;
+    }, 'credits:note');
+    changed({ panel: false });
+    renderShare();
+  };
+  $('share-note').addEventListener('input', e => { if (!e.isComposing) setNote(e.target.value); });
+  $('share-note').addEventListener('compositionend', e => setNote(e.target.value));
+  $('share-note-fill').addEventListener('click', () => {
+    $('share-note').value = UNHEARD_NOTE;
+    setNote(UNHEARD_NOTE);
+    $('share-note').focus();
+  });
   $('share-download').addEventListener('click', () => {
     const { prepared, outcome, mode } = renderShare();
     if (mode === 'file') { download(fileName(prepared.song, ' (分享)'), outcome.text); markExported(); status('已下载分享文件。', true); }
@@ -1583,6 +1871,8 @@ async function start() {
     status('上次的草稿读不出来，已新建空白应援。', true);
   }
   state.dirty = !!(draft && draft.dirty);
+  // A draft from before this was recorded is not asked about how it was made.
+  state.heard = draft ? draft.heard !== false : false;
   state.member = draft && typeof draft.member === 'string' && chart().members.some(member => member.id === draft.member) ? draft.member : null;
   state.sourcePath = draft && typeof draft.sourcePath === 'string' && draft.sourcePath.startsWith(P.LIBRARY_DIR + '/') ? draft.sourcePath : null;
   state.sourceSha256 = draft && /^[a-f0-9]{64}$/.test(draft.sourceSha256) ? draft.sourceSha256 : null;
@@ -1590,8 +1880,8 @@ async function start() {
   state.manualGrid = typed && typeof typed === 'object' && typeof typed.audioName === 'string' && Number.isFinite(typed.duration) && typed.duration > 0 &&
     S.gridFromBPM(typed.bpm, typed.anchor, typed.duration) ? { bpm: typed.bpm, anchor: typed.anchor, audioName: typed.audioName, duration: typed.duration } : null;
   if (draft && typeof draft.lyricsText === 'string' && draft.lyricsText) { state.lyricsText = draft.lyricsText; applyLyrics(draft.lyricsText); state.dirty = !!draft.dirty; }
-  if (draft && chart().events.length) status(`已恢复上次的草稿（${chart().events.length} 条应援）。重新选择音频“${draft.audioName || ''}”即可继续。`);
-  else status('选择本地音频开始。音频只在你的浏览器里播放，不会上传。');
+  if (draft && chart().events.length) status(`已恢复上次的草稿（${chart().events.length} 条应援）。${draft.audioName ? `重新选择音频“${draft.audioName}”即可继续。` : '可以点“播放”无声计时，或选择本地音频。'}`);
+  else status('选择本地音频，或不用音频：填上时长、加载歌词就能开始。音频只在你的浏览器里播放，不会上传。');
   // A link from the library opens that file once; the address is then cleaned so a reload does
   // not open it again over the visitor's edits.
   const wanted = new URLSearchParams(location.search).get('cheer');
@@ -1607,11 +1897,16 @@ async function start() {
         // Keep the revision actually opened, including after closing and restoring this draft.
         const digest = crypto.subtle ? new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)) : null;
         const sha256 = digest ? [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('') : null;
-        importCheer(bytes, '社区库里的这份应援', { path: plainPath ? path : null, sha256 });
+        // "在网页中播放": it opens ready to watch, on the silent clock until audio is chosen.
+        if (importCheer(bytes, '社区库里的这份应援', { path: plainPath ? path : null, sha256 }) && !hasAudio()) {
+          state.notice = 'community';
+          setMode(true);
+        }
       } else status('没能读取社区库里的这份应援。', true);
     } catch { status('没能读取社区库里的这份应援。', true); }
   }
   check.flush();
+  syncSource();
   renderAll();
   frame(true);
 }

@@ -3,9 +3,10 @@
 
 <section class="ed-toolbar" aria-label="工具栏">
   <div class="ed-song">
-    <label class="ed-field"><span>歌名</span><input id="song-title" autocomplete="off" maxlength="200" placeholder="选择音频后自动填入"></label>
+    <label class="ed-field"><span>歌名</span><input id="song-title" autocomplete="off" maxlength="200" placeholder="选择音频时自动填入，也可以自己填"></label>
     <label class="ed-field"><span>艺人</span><input id="song-artist" autocomplete="off" maxlength="200"></label>
-    <span id="song-duration" class="meta"></span>
+    <label class="ed-field duration"><span>时长</span><input id="song-duration" autocomplete="off" inputmode="numeric" maxlength="12" placeholder="如 3:45" aria-describedby="song-duration-note"></label>
+    <span id="song-duration-note" class="visually-hidden">歌曲时长，按 分:秒 填写。选择本地音频后由音频决定。</span>
   </div>
   <div class="ed-actions" role="toolbar" aria-label="操作">
     <button type="button" id="pick-audio" class="primary">选择本地音频</button>
@@ -28,20 +29,27 @@
 </section>
 
 <section class="ed-welcome card" id="welcome" aria-labelledby="welcome-title">
-  <h2 id="welcome-title">三步做一份应援</h2>
-  <ol class="steps">
-    <li><strong>选择本地音频</strong>：歌曲只在你的浏览器里播放和分析节拍，不会上传。</li>
-    <li><strong>加载歌词</strong>：导入或粘贴 LRC，或点“在线查找”从 LRCLIB 查询。歌词只用来对时间，不会写进应援文件。</li>
-    <li><strong>边听边点</strong>：按住成员按钮（或数字键 1–9）记录演唱段落，M / C / N 记录 MIX、call、提示；右侧 MIX 库一点就插入。</li>
-  </ol>
-  <p class="meta">草稿自动保存在这个浏览器里。做好后“保存到本机”，或“分享 / 投稿”到 CheerBook。</p>
+  <h2 id="welcome-title">开始制作应援</h2>
+  <ul class="steps">
+    <li><button type="button" data-start="audio">选择本地音频</button>：边听边打点，浏览器本地分析节拍，音频不会上传。</li>
+    <li><button type="button" data-start="duration">没有音频也能做</button>：填上时长或<button type="button" data-start="lyrics">在线查歌词</button>，用无声计时或直接按歌词放 call、MIX。</li>
+  </ul>
+  <p class="meta">按住成员按钮（或数字键 1–9）记录演唱段落，M / C / N 记录 MIX、call、提示；右侧 MIX 库一点就插入。歌词只用来对时间，不会写进应援文件。</p>
+  <p class="meta">草稿自动保存在这个浏览器里。做好后可“保存到本机”，或“分享 / 投稿”到 CheerBook。</p>
+</section>
+
+<section class="ed-notice card" id="notice" aria-label="没有歌曲声音" hidden>
+  <p>当前没有歌曲声音，点“播放”按时间看应援。想听着看：</p>
+  <button type="button" id="notice-audio">选择本地音频</button>
+  <button type="button" id="notice-close" aria-label="关闭这条提示">×</button>
 </section>
 
 <div class="ed-main">
   <section class="ed-lyrics card" aria-labelledby="timeline-title">
     <h2 id="timeline-title" class="visually-hidden">歌词与应援</h2>
+    <p id="watch-note" class="timeline-empty" hidden>应援文件不含歌词。可以点“歌词…”查找或导入，也可以直接看下面按时间排列的应援。</p>
     <ol id="timeline" class="timeline" aria-label="歌词与应援，按时间排列"></ol>
-    <p id="timeline-empty" class="timeline-empty">还没有歌词。没有歌词也可以边听边点，应援会按时间列在这里。</p>
+    <p id="timeline-empty" class="timeline-empty">还没有歌词。没有歌词也可以打点，应援会按时间列在这里。</p>
   </section>
 
   <aside class="ed-side" aria-label="侧栏">
@@ -76,6 +84,8 @@
   <div id="band" class="band" aria-live="off"></div>
   <div class="transport">
     <button type="button" id="play" class="play" aria-keyshortcuts="Space" disabled>播放</button>
+    <span id="source" class="source" hidden></span>
+    <button type="button" id="source-silent" class="source-switch" hidden title="不用这个音频，改由页面自己计时（没有声音）">切回无声</button>
     <span id="clock" class="clock">0:00.0 / 0:00</span>
     <input type="range" id="seek" min="0" max="0" step="0.01" value="0" aria-label="播放位置" disabled>
     <label class="ed-field rate"><span>速度</span>
@@ -88,7 +98,9 @@
       <button type="button" id="grid-half" hidden title="速度减半">÷2</button>
       <button type="button" id="grid-shift" hidden title="小节线往后移一拍">移一拍</button>
       <button type="button" id="grid-set" hidden title="直接填写节拍速度和小节线的位置">BPM 与起拍偏移…</button>
+      <button type="button" id="tap-tempo" aria-keyshortcuts="T" title="跟着歌（没有音频时跟着心里的节奏）连点 8 下，或按 T 键">跟拍 8 下估 BPM</button>
     </span>
+    <label class="check metronome" id="metronome-row" title="设置或跟拍估出 BPM 后可开启（只有嘀嘀声）。"><input type="checkbox" id="metronome" disabled> 节拍提示音</label>
   </div>
   <div id="sticks" class="sticks" role="toolbar" aria-label="打点：按住记录，松开结束"></div>
 </section>
@@ -103,7 +115,9 @@
       <input type="file" id="lyrics-file" accept=".lrc,.txt,text/plain" class="visually-hidden" tabindex="-1">
       <button type="button" id="lyrics-online">在线查找</button>
     </div>
-    <p class="meta" id="lyrics-online-note">“在线查找”会向 LRCLIB（lrclib.net，公开的歌词库）发送歌名、艺人和时长，不发送音频或应援内容；和访问任何网站一样，对方能看到你的网络地址。</p>
+    <p class="meta" id="lyrics-online-note">“在线查找”会向 LRCLIB（lrclib.net，公开的歌词库）发送歌名和艺人（有歌曲时长时一并发送），不发送音频或应援内容；和访问任何网站一样，对方能看到你的网络地址。</p>
+    <p class="meta" id="lyrics-candidates-note" hidden>选一条时长与你要做的版本一致的（现场版、短版时长会不同）。</p>
+    <ul id="lyrics-candidates" class="candidates" aria-label="找到的歌词"></ul>
     <p id="lyrics-result" role="status" aria-live="polite"></p>
     <div class="dialog-row end">
       <button type="button" data-close>取消</button>
@@ -119,7 +133,7 @@
     <p class="meta">按键总会比听到的晚一点，记录时自动往前移这么多。可以用下面的“校准”测一测。</p>
     <div class="dialog-row"><button type="button" id="calibrate">校准反应时间…</button><span id="calibrate-result" class="meta"></span></div>
     <label class="ed-field"><span>整体偏移（秒，−10–10，正值让应援提前）</span><input id="offset" type="number" min="-10" max="10" step="0.05" aria-describedby="offset-note"></label>
-    <p class="meta" id="offset-note">整体偏移会移动整份应援。要让拍子对上音频（第一拍不在 0:00），请用下面的“BPM 与起拍偏移”。</p>
+    <p class="meta" id="offset-note">整体偏移会移动整份应援。要让拍子对上歌曲（第一拍不在 0:00），请用下面的“BPM 与起拍偏移”。</p>
     <fieldset class="ed-choice">
       <legend>MIX 显示（至少一种）</legend>
       <label><input type="checkbox" id="show-original"> 原文</label>
@@ -127,7 +141,6 @@
       <label><input type="checkbox" id="show-romaji"> 罗马音</label>
     </fieldset>
     <div class="dialog-row">
-      <button type="button" id="tap-tempo">跟拍 8 下估速度</button>
       <button type="button" id="grid-open">BPM 与起拍偏移…</button>
       <button type="button" id="sort-events">按时间排序</button>
     </div>
@@ -149,8 +162,8 @@
     <h2 id="grid-title">BPM 与起拍偏移</h2>
     <p class="meta" id="grid-intro">自动分析或跟拍不准时，直接填写节拍速度和第一小节的位置。拍子按 4/4 拍，只用来对齐 MIX、逐词对齐和推荐，不会写进应援文件。</p>
     <label class="ed-field"><span>节拍速度（BPM，40–320）</span><input id="grid-bpm" type="number" min="40" max="320" step="any" inputmode="decimal" required></label>
-    <label class="ed-field"><span>起拍偏移（秒）：第一小节第一拍在音频里的位置</span><input id="grid-anchor" type="number" min="0" step="0.001" inputmode="decimal" required aria-describedby="grid-anchor-note"></label>
-    <p class="meta" id="grid-anchor-note">音频开头有静音或没有固定节拍的前奏、第一拍不在 0:00 时填这里，例如 0.469。可以先把播放停在第一拍上，再点“设为当前播放位置”。</p>
+    <label class="ed-field"><span>起拍偏移（秒）：第一小节第一拍在歌曲里的位置</span><input id="grid-anchor" type="number" min="0" step="0.001" inputmode="decimal" required aria-describedby="grid-anchor-note"></label>
+    <p class="meta" id="grid-anchor-note">歌曲开头有静音或没有固定节拍的前奏、第一拍不在 0:00 时填这里，例如 0.469。可以先把播放停在第一拍上，再点“设为当前播放位置”。</p>
     <div class="dialog-row">
       <button type="button" id="grid-here">设为当前播放位置</button>
       <button type="button" id="grid-auto" hidden>恢复自动分析的结果</button>
@@ -198,6 +211,8 @@
       <label><input type="radio" name="target" value="new"> 另投一份新文件</label>
       <p class="meta">修改已有投稿需要原作者或维护者批准，由维护者合并。</p>
     </fieldset>
+    <p id="share-unheard" class="meta" hidden>这份应援还没有对着音频校对过，时间可能有出入。建议写进制作说明，方便使用的人在映场里微调偏移。 <button type="button" id="share-note-fill">填入制作说明</button></p>
+    <label class="ed-field block"><span>制作说明（选填，最多 200 字）</span><textarea id="share-note" rows="2" maxlength="200"></textarea></label>
     <label class="check" id="share-confirm-row" hidden><input type="checkbox" id="share-confirm"> 没有歌词可核对；我确认文件里没有歌词原文</label>
     <p id="share-outcome" class="share-outcome" role="status" aria-live="polite"></p>
     <div class="dialog-row end">

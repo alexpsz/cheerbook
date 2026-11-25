@@ -103,14 +103,14 @@ ${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</spa
 <li><strong>${library.entries.length}</strong><span>条通用 MIX</span></li>
 <li><strong>${mixRecords.length}</strong><span>条艺人专属 MIX</span></li>
 </ul>
-<p class="cta"><a class="button" href="/editor/">在网页上制作应援</a><span class="meta">选一首本地歌曲，边听边点；音频不会上传。</span></p>
+<p class="cta"><a class="button" href="/editor/">在网页上制作应援</a><span class="meta">选一首本地歌曲边听边点，没有音频也能按歌词做；音频不会上传。</span></p>
 </div>
 <section aria-labelledby="browse"><h2 id="browse">浏览应援</h2>
 ${browse}
 </section>
 <section aria-labelledby="use"><h2 id="use">怎样使用</h2>
 <div class="grid">
-<div class="card"><h3>在网页上</h3><ol class="steps"><li>打开<a href="/editor/">制作应援</a>，选择本地音频。</li><li>加载歌词，按住成员按钮或数字键边听边点，或从通用 MIX 一点插入。</li><li>保存到本机，或直接投稿到 CheerBook。</li></ol></div>
+<div class="card"><h3>在网页上</h3><ol class="steps"><li>打开<a href="/editor/">制作应援</a>，选择本地音频；没有音频就填上时长或在线查歌词。</li><li>加载歌词，按住成员按钮或数字键边听边点，或从通用 MIX 一点插入。</li><li>保存到本机，或直接投稿到 CheerBook。</li></ol></div>
 <div class="card"><h3>在映场中</h3><ol class="steps"><li>点应援文件旁的“在映场中打开”，在支持社区应援的版本中预览并确认导入。</li><li>使用较早版本时，可以下载文件，在<a href="${LIVEGLOW}">映场</a>“正在播放”侧栏的“应援”标签点“导入…”。</li><li>播放到匹配的录音时，MIX 与 call 会跟着歌词出现。</li></ol></div>
 <div class="card"><h3>投稿</h3><p>只收自己听写打轴、或有开放许可 / 原作者同意的时间轴，不能有歌词原文。在<a href="/editor/">制作页</a>选择免账号投稿，送出后可凭链接查看进度。也可以按<a href="${REPO}/blob/main/CONTRIBUTING.md">投稿指南</a>自行在 GitHub 提交。</p></div>
 <div class="card"><h3>MIX</h3><p><a href="/mix/">MIX 页</a>收录通用 MIX 与各位艺人的专属 MIX。你可以<a href="/editor/mix/?type=proposal">提议通用 MIX</a>，审核后并入内置库；也可以<a href="/editor/mix/?type=artist">投稿艺人专属 MIX</a>，制作这位艺人的歌时就能一点插入。</p></div>

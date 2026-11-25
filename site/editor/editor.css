@@ -117,7 +117,7 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .share-outcome { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
 .check { display: flex; gap: 8px; align-items: flex-start; }
 
-.editor[data-mode="watch"] .ed-side, .editor[data-mode="watch"] .sticks, .editor[data-mode="watch"] .ed-actions > :not(#toggle-mode):not(#pick-audio):not(#open-lyrics):not(#open-import) { display: none; }
+.editor[data-mode="watch"] .ed-side, .editor[data-mode="watch"] .sticks, .editor[data-mode="watch"] #tap-tempo, .editor[data-mode="watch"] .metronome, .editor[data-mode="watch"] .ed-actions > :not(#toggle-mode):not(#pick-audio):not(#open-lyrics):not(#open-import) { display: none; }
 .editor[data-mode="watch"] .ed-main { grid-template-columns: 1fr; }
 .editor[data-mode="watch"] .row { grid-template-columns: 6px minmax(0, 1fr); padding: 10px 24px; border-left-color: transparent; }
 .editor[data-mode="watch"] .row .time, .editor[data-mode="watch"] .row .tags, .editor[data-mode="watch"] .row.gap { display: none; }
@@ -163,3 +163,25 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 
 #submission-panel:not([hidden]) { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
 #submission-panel h3, #submission-panel p { margin: 0; }
+
+/* Without audio (C-016): the source beside the play button, the bar shown after "在网页中播放",
+   the length field, putting a cheer on a lyric row, and watching a cheer that has no lyrics. */
+.ed-song .ed-field.duration input { min-width: 0; width: 6.5em; }
+.ed-welcome .steps { padding-left: 1.2em; }
+.ed-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ed-notice p { margin: 0; flex: 1 1 16em; }
+.transport .source { font-size: 0.82rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; white-space: nowrap; }
+.transport .source-switch { padding: 2px 8px; font-size: 0.85rem; }
+.transport .metronome { align-items: center; font-size: 0.9rem; }
+.candidates { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 14em; overflow: auto; }
+.candidates button { width: 100%; text-align: left; }
+.row { grid-template-columns: 4.2em 6px minmax(0, 1fr) auto; }
+.row-add { visibility: hidden; padding: 0 8px; font-size: 1rem; line-height: 1.5; align-self: start; }
+.row:hover .row-add, .row:focus-within .row-add, .row-add[aria-expanded="true"] { visibility: visible; }
+@media (hover: none) { .row-add { visibility: visible; } }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.row-actions button { padding: 2px 10px; font-size: 0.88rem; }
+.editor[data-mode="watch"][data-lyrics="none"] .row { grid-template-columns: 4.2em 6px minmax(0, 1fr); }
+.editor[data-mode="watch"][data-lyrics="none"] .row .time, .editor[data-mode="watch"][data-lyrics="none"] .row .tags { display: revert; }
+.editor[data-mode="watch"][data-lyrics="none"] .row .tags { display: flex; margin-top: 0; }
+.editor[data-mode="watch"][data-lyrics="none"] .tag { font-size: 1.15rem; padding: 4px 12px; }

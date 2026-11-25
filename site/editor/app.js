@@ -129,7 +129,8 @@ function useChart(next, { compensation, quiet } = {}) {
 // cheer can ask first even right after a reload; the previous draft is also kept as a backup.
 const saveDraft = debounce(() => {
   if (!state.ed) return;
-  rememberVideo();
+  // Remembering the video is a convenience; whatever is wrong with its store, the draft is still saved.
+  try { rememberVideo(); } catch { /* the draft matters more */ }
   const ok = storage.set(DRAFT_KEY, {
     chart: chart(), compensation: state.ed.compensation, lyricsText: state.lyricsText, dirty: state.dirty,
     audioName: state.audioName, heard: state.heard, watched: state.watched, member: state.member, sourcePath: state.sourcePath, sourceSha256: state.sourceSha256, grid: state.manualGrid, savedAt: new Date().toISOString(),
@@ -262,14 +263,16 @@ function rememberVideo() {
   if (!key || !video || !video.link || video.mode === 'failed' || video.loading) return;
   const all = videoHistory();
   all[key] = { link: video.link, offset: video.mode === 'youtube' ? transport.videoOffset : 0, marked: video.marked === true, start: video.start ?? null, at: Date.now() };
-  storage.set(VIDEOS_KEY, Object.fromEntries(Object.entries(all).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, 20)));
+  storage.set(VIDEOS_KEY, Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 20)));
 }
 
 /** What is remembered, without anything that is not a record (the store may hold what an older page or an extension left). */
 function videoHistory() {
   const saved = storage.get(VIDEOS_KEY);
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return {};
-  return Object.fromEntries(Object.entries(saved).filter(([, entry]) => entry && typeof entry === 'object' && !Array.isArray(entry) && entry.link && typeof entry.link === 'object'));
+  return Object.fromEntries(Object.entries(saved)
+    .filter(([, entry]) => entry && typeof entry === 'object' && !Array.isArray(entry) && entry.link && typeof entry.link === 'object')
+    .map(([key, entry]) => [key, { ...entry, at: typeof entry.at === 'number' && Number.isFinite(entry.at) ? entry.at : 0 }]));
 }
 
 /** After a cheer is opened: the video used with it last time is offered, never loaded by itself. */
@@ -403,14 +406,19 @@ async function loadVideo(link, { start = null, offset = null, marked = false } =
 /** A cheer with no length yet takes the rest of the video, until "歌到这里结束" says better. */
 function fillLengthFromVideo(seconds) {
   if (chart().song.duration || !(seconds >= 10)) return;
+  // The page did this, not the maker: it does not count as editing against the video.
+  const watched = state.watched;
   updateSong({ duration: Math.min(7200, Math.round(seconds * 1000) / 1000) }, 'song');
+  state.watched = watched;
 }
 
 function videoFailed(video, kind) {
+  // What a retry should restore: the start as the maker last left it, read before the video is let go.
+  const again = transport.kind === 'video' ? { offset: transport.videoOffset, marked: video.marked === true } : video.again || {};
   if (transport.kind === 'video') transport.useSilent(chart().song.duration || 0);
   if (video.player) video.player.destroy();
   clear($('video-frame'));
-  state.video = { mode: 'failed', link: video.link, failure: kind, again: video.again || {} };
+  state.video = { mode: 'failed', link: video.link, failure: kind, again };
   syncSource();
   renderVideo();
   frame(true);
@@ -897,7 +905,16 @@ function frame(force = false, { reposition = true } = {}) {
   if (state.held.size) renderHeldTags(pos);
 }
 
-transport.on('play', () => { if (state.video) state.video.ended = false; syncPlayLabel(); renderVideo(); click.reset(); frame(true); startLoop(); });
+transport.on('play', () => {
+  // It was still buffering when a dialog opened, and starts only now: nothing plays under a dialog.
+  if (transport.kind === 'video' && root.dataset.modal === 'open') { transport.pause(); return; }
+  if (state.video) state.video.ended = false;
+  syncPlayLabel();
+  renderVideo();
+  click.reset();
+  frame(true);
+  startLoop();
+});
 transport.on('pause', () => { syncPlayLabel(); renderVideo(); click.reset(); frame(true); });
 transport.on('ended', () => {
   // Hand sync that has run out waits for "开始" again, with nothing carried over.
@@ -911,6 +928,13 @@ transport.on('ended', () => {
 // A video's length can arrive after it is ready, and its rate can be changed in the player's own menu.
 transport.on('durationchange', () => {
   if (transport.kind !== 'video') return;
+  const video = state.video;
+  // The length arrived late and the remembered start lies beyond it: begin at the top.
+  if (video && video.player && video.player.duration() > 0 && transport.videoOffset >= video.player.duration()) {
+    video.marked = false;
+    transport.setVideoOffset(0);
+    status('记住的歌曲起点超出了这个视频的长度，已从头开始；请重新标记“歌从这里开始”。', true);
+  }
   fillLengthFromVideo(transport.duration());
   syncSource();
   renderVideo();

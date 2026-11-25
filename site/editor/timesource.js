@@ -9,7 +9,8 @@
 // a monotonic clock; `schedule` / `cancel` are setTimeout / clearTimeout. They are parameters so the
 // clock can be tested without a browser.
 export function createTransport(audio, { now = () => performance.now() / 1000, schedule = (fn, ms) => setTimeout(fn, ms), cancel = id => clearTimeout(id) } = {}) {
-  const listeners = { play: [], pause: [], ended: [], seeked: [] };
+  // 'durationchange' and 'ratechange' come from a video player, whose length and rate the visitor can change in it.
+  const listeners = { play: [], pause: [], ended: [], seeked: [], durationchange: [], ratechange: [] };
   const emit = name => { for (const listener of listeners[name]) listener(); };
   let kind = 'none';
   let video = null, videoOffset = 0;

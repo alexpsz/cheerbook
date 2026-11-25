@@ -129,6 +129,7 @@ function useChart(next, { compensation, quiet } = {}) {
 // cheer can ask first even right after a reload; the previous draft is also kept as a backup.
 const saveDraft = debounce(() => {
   if (!state.ed) return;
+  rememberVideo();
   const ok = storage.set(DRAFT_KEY, {
     chart: chart(), compensation: state.ed.compensation, lyricsText: state.lyricsText, dirty: state.dirty,
     audioName: state.audioName, heard: state.heard, watched: state.watched, member: state.member, sourcePath: state.sourcePath, sourceSha256: state.sourceSha256, grid: state.manualGrid, savedAt: new Date().toISOString(),
@@ -144,7 +145,7 @@ function changed({ save = true, panel = true } = {}) {
   if (draftSnapshot && draftSnapshot !== chart()) resetDraftLink();
   if (save) state.dirty = true;
   if (save && hasAudio()) state.heard = true;
-  if (save && transport.kind === 'video') state.watched = true;
+  if (save && (transport.kind === 'video' || manual())) state.watched = true;
   syncSource();
   check();
   renderAll({ panel });
@@ -252,23 +253,29 @@ const platformName = link => (link.platform === 'youtube' ? 'YouTube' : 'Bilibil
 /** What a remembered video is kept under: the community file, or the song when it has a name. */
 function chartKey() {
   const song = chart().song;
-  return state.sourcePath || (song.title && song.artist ? [song.artist, song.title, Math.round(song.duration || 0)].join('\n') : null);
+  return state.sourcePath || (song.title && song.artist ? [song.artist, song.title].join('\n') : null);
 }
 
 function rememberVideo() {
   const key = chartKey(), video = state.video;
-  if (!key || !video || !video.link || video.mode === 'failed') return;
-  const saved = storage.get(VIDEOS_KEY);
-  const all = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  // Not while it is still loading: the start it will have is not in place yet.
+  if (!key || !video || !video.link || video.mode === 'failed' || video.loading) return;
+  const all = videoHistory();
   all[key] = { link: video.link, offset: video.mode === 'youtube' ? transport.videoOffset : 0, marked: video.marked === true, start: video.start ?? null, at: Date.now() };
   storage.set(VIDEOS_KEY, Object.fromEntries(Object.entries(all).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, 20)));
+}
+
+/** What is remembered, without anything that is not a record (the store may hold what an older page or an extension left). */
+function videoHistory() {
+  const saved = storage.get(VIDEOS_KEY);
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return {};
+  return Object.fromEntries(Object.entries(saved).filter(([, entry]) => entry && typeof entry === 'object' && !Array.isArray(entry) && entry.link && typeof entry.link === 'object'));
 }
 
 /** After a cheer is opened: the video used with it last time is offered, never loaded by itself. */
 function offerVideo() {
   const key = chartKey();
-  const all = storage.get(VIDEOS_KEY);
-  const saved = key && all && typeof all === 'object' ? all[key] : null;
+  const saved = key ? videoHistory()[key] || null : null;
   // What was stored is checked again as if it had just been pasted.
   const link = saved && saved.link && VD.videoWatchURL(saved.link) ? saved.link : null;
   state.videoOffer = link && !state.video ? {
@@ -283,6 +290,7 @@ function renderVideoOffer() {
   const offer = state.videoOffer;
   $('video-offer').hidden = !offer;
   if (offer) $('video-offer-text').textContent = `上次用的是一个 ${platformName(offer.link)} 视频。为保护隐私，没有自动加载；点“加载视频”后会连接 ${platformName(offer.link)}。`;
+  $('video-offer-terms').hidden = !(offer && offer.link.platform === 'youtube');
 }
 
 function openVideoDialog() {
@@ -313,14 +321,23 @@ function renderVideoDialog() {
   return ok ? found : null;
 }
 
+/** Where in a video to start, as typed: seconds, m:ss or h:mm:ss, from 0 up to a day (a song's length is read elsewhere and is stricter). */
+function parseStartClock(text) {
+  const match = /^(\d{1,5})(?:[:：](\d{1,2}))?(?:[:：](\d{1,2}))?$/.exec(String(text).trim());
+  if (!match) return null;
+  const parts = match.slice(1).filter(part => part !== undefined).map(Number);
+  if (parts.slice(1).some(part => part >= 60)) return null;
+  const seconds = parts.reduce((total, part) => total * 60 + part, 0);
+  return seconds <= 86400 ? seconds : null;
+}
+
 function loadFromDialog() {
   const link = renderVideoDialog();
   if (!link) return;
   let start = null;
   if (link.platform === 'bilibili' && $('video-start').value.trim()) {
-    const seconds = E.parseDuration($('video-start').value);
-    if (seconds === null) { $('video-recognized').textContent = '歌曲起点请按 分:秒 填写，例如 1:23；不填就从头加载。'; return; }
-    start = Math.floor(seconds);
+    start = parseStartClock($('video-start').value);
+    if (start === null) { $('video-recognized').textContent = '歌曲起点请按 分:秒 填写，例如 1:23；不填就从头加载。'; return; }
   }
   $('video-dialog').close('load');
   loadVideo(link, { start });
@@ -344,30 +361,35 @@ async function loadVideo(link, { start = null, offset = null, marked = false } =
       sandbox: 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation',
     }));
     state.video = { mode: 'bilibili', link, start, phase: 'standby', nudge: 0 };
+    restAtStart();
     rememberVideo();
     syncSource();
     renderVideo();
     status(transport.ready ? '已加载 Bilibili 视频。在视频里播放，歌一响就点“开始”。' : '已加载 Bilibili 视频。先在上方填写歌曲时长，才能对时。', true);
     return;
   }
-  const video = { mode: 'youtube', link, loading: true, marked: false };
+  // `again` is what a retry needs, so a start marked earlier survives a failed load.
+  const video = { mode: 'youtube', link, loading: true, marked: false, again: { offset, marked } };
   state.video = video;
   renderVideo();
   try {
-    const from = offset ?? link.start ?? 0;
+    let from = offset ?? link.start ?? 0;
     const player = await createYouTubePlayer($('video-frame'), link.id, {
-      start: from, notify: name => transport.notify(name),
+      start: from, notify: name => transport.notify(name), current: () => state.video === video,
       onError: kind => { if (state.video === video) videoFailed(video, kind); },
     });
     // Closed, or another one chosen, while this one was loading.
     if (state.video !== video) { player.destroy(); return; }
     video.player = player;
     video.loading = false;
-    video.marked = marked || from > 0;
+    // A start remembered for another upload of this length no longer fits: begin at the top.
+    const stale = player.duration() > 0 && from >= player.duration();
+    if (stale) from = 0;
+    video.marked = !stale && (marked || from > 0);
+    // Before the video becomes the source, so filling in a length is not taken for editing against it.
+    fillLengthFromVideo(player.duration() - from);
     transport.useVideo(player, from);
     transport.setRate(Number($('rate').value) || 1);
-    // A cheer with no length yet takes the rest of the video, until "歌到这里结束" says better.
-    if (!chart().song.duration && transport.duration() > 0) updateSong({ duration: Math.min(7200, Math.round(transport.duration() * 1000) / 1000) }, 'song');
     rememberVideo();
     syncSource();
     renderVideo();
@@ -378,14 +400,27 @@ async function loadVideo(link, { start = null, offset = null, marked = false } =
   }
 }
 
+/** A cheer with no length yet takes the rest of the video, until "歌到这里结束" says better. */
+function fillLengthFromVideo(seconds) {
+  if (chart().song.duration || !(seconds >= 10)) return;
+  updateSong({ duration: Math.min(7200, Math.round(seconds * 1000) / 1000) }, 'song');
+}
+
 function videoFailed(video, kind) {
   if (transport.kind === 'video') transport.useSilent(chart().song.duration || 0);
   if (video.player) video.player.destroy();
   clear($('video-frame'));
-  state.video = { mode: 'failed', link: video.link, failure: kind };
+  state.video = { mode: 'failed', link: video.link, failure: kind, again: video.again || {} };
   syncSource();
   renderVideo();
   frame(true);
+}
+
+/** Hand sync waits at 0:00 for "开始", whatever the silent clock was doing. */
+function restAtStart() {
+  if (transport.kind !== 'silent') return;
+  transport.pause();
+  transport.seek(0);
 }
 
 /** "外部播放 · 手动对时": the video or the song plays somewhere else; the cheers are started by hand. */
@@ -393,6 +428,7 @@ function startExternal() {
   closeVideo({ quiet: true });
   if (hasAudio()) dropAudio({ quiet: true });
   state.video = { mode: 'external', link: null, phase: 'standby', nudge: 0 };
+  restAtStart();
   syncSource();
   renderVideo();
   status(transport.ready ? '在别处播放这首歌，歌一响就点“开始”。' : '先在上方填写歌曲时长，才能对时。', true);
@@ -475,12 +511,25 @@ function afterOffset() {
   renderVideo();
   frame(true);
 }
+/**
+ * Cheers that a song of `seconds` would leave past its end (the format allows 5 s over): a length
+ * that cuts them off would make a file this page itself refuses to open, so it is not taken.
+ */
+function pastEnd(seconds) {
+  const late = chart().events.filter(event => event.end > seconds + 5);
+  if (!late.length) return '';
+  const last = Math.max(...late.map(event => event.end));
+  return `有 ${late.length} 条应援在这之后（最晚到 ${formatTime(playbackTime(last))}）。先删掉或移动它们，再改时长。`;
+}
+
 /** YouTube, while making a cheer: the song ends where the video is now. */
 function markEnd() {
   if (transport.kind !== 'video') return;
   const seconds = Math.round(position() * 1000) / 1000;
   if (seconds < 10) { status('离歌曲起点太近了：先标记歌曲起点，再把视频播到歌结束的地方。', true); return; }
   if (seconds > 7200) { status('歌曲最长 2 小时。', true); return; }
+  const conflict = pastEnd(seconds);
+  if (conflict) { status(`没有改时长：${conflict}`, true); return; }
   updateSong({ duration: seconds }, 'song:duration');
   const from = transport.videoOffset;
   status(`已将歌曲时长设为 ${formatClock(seconds)}（视频 ${formatTime(from)}–${formatTime(from + seconds)}）。`, true);
@@ -507,8 +556,8 @@ function renderVideo() {
   $('video-status').textContent = failed ? VIDEO_FAILURES[video.failure] || `连不上 ${platformName(video.link)}，视频没能加载。可以重试、换其他来源，或改用无声计时。`
     : video.loading ? '正在连接 YouTube…'
       : youtube ? 'YouTube 视频：应援跟着视频走。在视频上播放、暂停、拖动都可以。'
-        : hand.phase === 'standby' ? (video.mode === 'bilibili' ? '视频里歌一响，就点“开始”' : '歌一响，就点“开始”')
-          : video.ended ? '本首应援已结束' : transport.paused ? '已暂停' : '正在跟着计时。对不上时用“提前 / 推后 0.1 秒”。';
+        : hand.phase === 'standby' ? `${video.ended ? '本首应援已结束。再来一遍：' : ''}${video.mode === 'bilibili' ? '视频里歌一响，就点“开始”' : '歌一响，就点“开始”'}`
+          : transport.paused ? '已暂停' : '正在跟着计时。对不上时用“提前 / 推后 0.1 秒”。';
   if (youtube) {
     for (const id of ['video-mark-hint', 'video-mark-start']) $(id).hidden = video.marked;
     for (const id of ['video-mark-at', 'video-mark-earlier', 'video-mark-later', 'video-mark-again']) $(id).hidden = !video.marked;
@@ -613,7 +662,7 @@ const click = {
   tick(pos) {
     const grid = state.grid, context = this.context;
     if (!this.on || !context || !grid || transport.paused) return;
-    const rate = Number($('rate').value) || 1;
+    const rate = transport.kind === 'video' && state.video && state.video.player ? state.video.player.rate : Number($('rate').value) || 1;
     // Beats in the next 0.15 s of real time are handed to the audio clock, which keeps them even.
     const horizon = pos + 0.15 * rate;
     let index = this.next ?? Math.ceil((pos - grid.anchor) / grid.beat - 1e-6);
@@ -850,7 +899,29 @@ function frame(force = false, { reposition = true } = {}) {
 
 transport.on('play', () => { if (state.video) state.video.ended = false; syncPlayLabel(); renderVideo(); click.reset(); frame(true); startLoop(); });
 transport.on('pause', () => { syncPlayLabel(); renderVideo(); click.reset(); frame(true); });
-transport.on('ended', () => { if (state.video) state.video.ended = true; syncPlayLabel(); renderVideo(); });
+transport.on('ended', () => {
+  // Hand sync that has run out waits for "开始" again, with nothing carried over.
+  const hand = manual();
+  if (hand) { hand.phase = 'standby'; hand.nudge = 0; }
+  if (state.video) state.video.ended = true;
+  syncSource();
+  syncPlayLabel();
+  renderVideo();
+});
+// A video's length can arrive after it is ready, and its rate can be changed in the player's own menu.
+transport.on('durationchange', () => {
+  if (transport.kind !== 'video') return;
+  fillLengthFromVideo(transport.duration());
+  syncSource();
+  renderVideo();
+  frame(true);
+});
+transport.on('ratechange', () => {
+  if (transport.kind !== 'video') return;
+  const rate = String(state.video.player.rate);
+  if ([...$('rate').options].some(option => option.value === rate)) $('rate').value = rate;
+  click.reset();
+});
 transport.on('seeked', () => { click.reset(); frame(true); });
 
 /** A dot that lights on each beat (brighter on bar lines), to check the grid by ear and eye. */
@@ -2011,6 +2082,15 @@ function renderAll({ panel = true } = {}) {
 // Wiring.
 
 function wire() {
+  // YouTube's terms: nothing is drawn over its player. While any dialog is open the video is paused
+  // and its frame is hidden, so the dialog and its backdrop cover no player.
+  const modal = () => {
+    const open = [...document.querySelectorAll('dialog')].some(dialog => dialog.open);
+    root.dataset.modal = open ? 'open' : 'none';
+    if (open && transport.kind === 'video' && !transport.paused) transport.pause();
+  };
+  const watcher = new MutationObserver(modal);
+  for (const dialog of document.querySelectorAll('dialog')) watcher.observe(dialog, { attributes: true, attributeFilter: ['open'] });
   $('pick-audio').addEventListener('click', pickAudio);
   $('audio-file').addEventListener('change', e => { loadAudio(e.target.files[0]); e.target.value = ''; });
   $('play').addEventListener('click', togglePlay);
@@ -2041,7 +2121,7 @@ function wire() {
   $('video-offer-skip').addEventListener('click', () => { state.videoOffer = null; renderVideoOffer(); });
   $('video-close').addEventListener('click', () => closeVideo());
   $('video-change').addEventListener('click', openVideoDialog);
-  $('video-retry').addEventListener('click', () => { if (state.video && state.video.link) loadVideo(state.video.link); });
+  $('video-retry').addEventListener('click', () => { const failed = state.video; if (failed && failed.link) loadVideo(failed.link, failed.again || {}); });
   $('video-to-external').addEventListener('click', startExternal);
   $('video-mark-start').addEventListener('click', markStart);
   $('video-mark-earlier').addEventListener('click', () => nudgeStart(-0.1));
@@ -2069,6 +2149,8 @@ function wire() {
     const seconds = E.parseDuration(text);
     // "3.45" reads as 3.45 seconds; no song is that short, so it is taken as a slip for 3:45.
     if (seconds === null || seconds < 10) { status('请按 分:秒 填写，例如 3:45。', true); e.target.value = shown; return; }
+    const conflict = pastEnd(seconds);
+    if (conflict) { status(`没有改时长：${conflict}`, true); e.target.value = shown; return; }
     updateSong({ duration: seconds }, 'song:duration');
     status(`歌曲时长设为 ${formatClock(seconds)}。可以点“播放”无声计时，或在“歌词…”里加载歌词。`, true);
   });

@@ -198,6 +198,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .ed-video .video-frame { flex: 0 0 auto; width: min(100%, 400px); aspect-ratio: 16 / 9; min-width: 200px; min-height: 225px; background: #000; border-radius: 8px; overflow: hidden; }
 .ed-video .video-frame:empty { display: none; }
 .ed-video .video-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.ed-video .video-frame > div { width: 100%; height: 100%; }
+/* A dialog is open: the player steps aside rather than sit under it (the video is paused then). */
+.editor[data-modal="open"] .ed-video .video-frame { visibility: hidden; }
 .ed-video .video-side { flex: 1 1 16em; display: grid; gap: 8px; min-width: 0; }
 .ed-video .video-status { margin: 0; }
 .editor[data-mode="watch"] #video-mark-end { display: none; }

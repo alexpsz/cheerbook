@@ -41,6 +41,21 @@ function makeLibrary(files) {
 const codes = result => result.problems.map(found => found.code).sort();
 const HOME = 'cheers/合成组合/合成曲目/';
 
+test('the cheer index preserves a production note and omits missing or blank notes', () => {
+  const note = '  <合成> & ' + '甲'.repeat(185) + '  ';
+  const root = makeLibrary({
+    [HOME + 'a.cheer.json']: chart({ credits: { note } }),
+    [HOME + 'b.cheer.json']: chart({ song: { duration: 181 } }),
+    [HOME + 'c.cheer.json']: chart({ song: { duration: 182 }, credits: { note: ' \t　' } }),
+  });
+  const { entries, problems } = library.checkLibrary(root);
+  assert.deepEqual(problems, []);
+  const [withNote, missing, blank] = library.buildIndex(entries).cheers;
+  assert.equal(withNote.note, note);
+  assert.equal(Object.hasOwn(missing, 'note'), false);
+  assert.equal(Object.hasOwn(blank, 'note'), false);
+});
+
 test('a well-formed original file in the right folder passes and is indexed under CC BY 4.0', () => {
   const result = library.checkLibrary(makeLibrary({ [HOME + '作者甲.cheer.json']: chart() }));
   assert.deepEqual(result.problems, []);

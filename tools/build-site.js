@@ -90,7 +90,7 @@ ${[...artists.values()].map(artist => `<div class="artist" data-artist><h3>${use
 ${[...artist.songs.values()].map(song => {
     const search = plainUserText([artist.name, song.title, ...song.files.flatMap(entry => entry.authors)].join(' '));
     return `<li class="song card" data-search="${escapeHTML(search)}"><h4>${userText(song.title)}</h4><ul class="files">
-${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</span><span class="meta">${escapeHTML(PERMISSIONS[entry.permission] || entry.permission)} · ${escapeHTML(licenseLabel(entry))} · ${entry.events} 处标记 · 时长 ${clock(entry.song.duration)}</span><span class="actions"><a href="/editor/?cheer=${encodeURIComponent(href(entry.path))}">在网页中播放</a><a href="liveglow://cheer/import?path=${encodeURIComponent(entry.path).replace(/'/g, '%27')}">在映场中打开</a><a href="${href(entry.path)}" download>下载</a><a href="${REPO}/blob/main/${entry.path.split('/').map(encodeURIComponent).join('/')}">GitHub</a></span></li>`).join('\n')}
+${song.files.map(entry => `<li><span>${userText(entry.authors.join('、'))}</span><span class="meta">${escapeHTML(PERMISSIONS[entry.permission] || entry.permission)} · ${escapeHTML(licenseLabel(entry))} · ${entry.events} 处标记 · 时长 ${clock(entry.song.duration)}${entry.note ? ` · 说明：${userText(entry.note)}` : ''}</span><span class="actions"><a href="/editor/?cheer=${encodeURIComponent(href(entry.path))}">在网页中播放</a><a href="liveglow://cheer/import?path=${encodeURIComponent(entry.path).replace(/'/g, '%27')}">在映场中打开</a><a href="${href(entry.path)}" download>下载</a><a href="${REPO}/blob/main/${entry.path.split('/').map(encodeURIComponent).join('/')}">GitHub</a></span></li>`).join('\n')}
 </ul></li>`;
   }).join('\n')}
 </ul></div>`).join('\n')}`;

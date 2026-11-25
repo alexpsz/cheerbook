@@ -233,6 +233,45 @@ const record = (fields) => ({
   plainLyrics: 'Paper lanterns rise', syncedLyrics: '[00:01.00]Paper lanterns rise', ...fields,
 });
 
+test('lrclibCandidates filters and groups records before taking twenty', () => {
+  const plain = record({ syncedLyrics: ' ', albumName: null, duration: 0 });
+  const timed = record({ plainLyrics: null });
+  const another = record({ trackName: 'Synthetic Reprise' });
+  const invalid = [null, false, 'text', [], {}, record({ artistName: ' ' }), record({ trackName: 7 }),
+    record({ instrumental: true, plainLyrics: '', syncedLyrics: null })];
+  const choices = lyrics.lrclibCandidates([plain, ...invalid, timed, another]);
+  assert.deepEqual(choices, [
+    { record: timed, title: timed.trackName, artist: timed.artistName, album: timed.albumName, duration: 200, synced: true },
+    { record: another, title: another.trackName, artist: another.artistName, album: another.albumName, duration: 200, synced: true },
+    { record: plain, title: plain.trackName, artist: plain.artistName, album: '', duration: null, synced: false },
+  ]);
+  assert.equal(choices[0].record, timed);
+  for (const value of [null, undefined, 'text', 2, {}]) assert.deepEqual(lyrics.lrclibCandidates(value), []);
+  for (const duration of [-1, NaN, Infinity, '200']) {
+    assert.equal(lyrics.lrclibCandidates([record({ duration })])[0].duration, null);
+  }
+  const manyPlain = Array.from({ length: 21 }, (_, i) => record({ trackName: 'Plain ' + i, syncedLyrics: null }));
+  const manyTimed = manyPlain.map(({ trackName }) => record({ trackName: 'Timed ' + trackName }));
+  assert.deepEqual(lyrics.lrclibCandidates([...manyPlain, timed]).map(c => c.record), [timed, ...manyPlain.slice(0, 19)]);
+  assert.deepEqual(lyrics.lrclibCandidates([...manyPlain, ...manyTimed]).map(c => c.record), manyTimed.slice(0, 20));
+});
+
+test('durationFromLyrics prefers length and caps the final timed line estimate', () => {
+  const inferred = duration => ({ duration, source: 'lastLine' });
+  assert.deepEqual(lyrics.durationFromLyrics(lyrics.parseLRC('[length:7200]\n[00:01]甲')), { duration: 7200, source: 'length' });
+  assert.deepEqual(lyrics.durationFromLyrics(lyrics.parseLRC('[length:0.001]')), { duration: 0.001, source: 'length' });
+  assert.deepEqual(lyrics.durationFromLyrics(lyrics.parseLRC('[00:55]乙\n[00:22]甲\n[01:00.125]')), inferred(70.125));
+  assert.deepEqual(lyrics.durationFromLyrics(lyrics.parseLRC('[120:00]甲')), inferred(7200));
+  for (const length of [undefined, 0, -1, 7200.001, Infinity, NaN, '30']) {
+    const lines = [{ start: 1, end: 100 }, { start: 5.1256, end: Infinity }, { text: '无时间' }];
+    assert.deepEqual(lyrics.durationFromLyrics({ lines, meta: { length } }), inferred(15.126));
+  }
+  for (const other of [null, undefined, 'text', [], {}, { lines: [] }, { meta: { length: 2 } },
+    { lines: [], meta: [] }, { lines: [null, { start: '3' }], meta: {} }, lyrics.parsePlain('无时间')]) {
+    assert.equal(lyrics.durationFromLyrics(other), null);
+  }
+});
+
 test('pickLRCLIB takes the same song by normalized names and duration', () => {
   const song = { title: 'Synthetic Anthem', artist: 'Fixture Unit', duration: 200 };
   const wrongArtist = record({ artistName: 'Other Unit' });

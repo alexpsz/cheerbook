@@ -37,6 +37,69 @@ const share = (chart, lyrics, confirmed = false) => shareOutcome(chart, lyrics, 
 
 // MARK: CheerEditorTests.swift
 
+test('parseDuration reads clocks and seconds to the nearest millisecond', () => {
+  for (const [input, seconds] of [
+    ['3:45', 225], [' 03：45.5 ', 225.5], ['1：02:03', 3723], ['225', 225], ['225.5', 225.5],
+    ['0.0005', 0.001], ['1.0005', 1.001], ['00:59.9999', 60], ['1:59:59.999', 7199.999],
+    ['2:00:00', 7200], ['120:00', 7200], ['7200.0004', 7200],
+  ]) assert.equal(editorModule.parseDuration(input), seconds, input);
+  for (const input of [null, undefined, 225, {}, '', ' \t', '0', '0.0004', '-1', '+1', '.5', '5.',
+    '3:60', '0:60:00', '0:00:60.1', '0.1:01', '0:01.5:00', '1::3', '1:2:3:4', ':1', '1:',
+    '1: 20', '2e2', 'Infinity', '1秒', '2:00:00.001', '7200.0005']) {
+    assert.equal(editorModule.parseDuration(input), null, String(input));
+  }
+});
+
+test('place applies offset without compensation and undoes one event', () => {
+  const editor = editorWithMembers();
+  editor.edit(chart => { chart.offset = 1.25; });
+  editor.compensation = 0.45;
+  assert.equal(editor.place('part', 12, 15, { member: 'm2', echo: true }), 0);
+  const before = editor.chart;
+  assert.deepEqual(before.events, [{ start: 13.25, end: 16.25, kind: 'part', members: ['m2'] }]);
+  assert.equal(editor.place('mix', 4, 6, { member: 'm1', echo: true }), 1);
+  assert.deepEqual(editor.chart.events[1], { start: 5.25, end: 7.25, kind: 'mix', members: ['m1'] });
+  editor.undo();
+  assert.deepEqual(editor.chart, before);
+  editor.redo();
+  assert.equal(editor.chart.events.length, 2);
+});
+
+test('place selects members, echo and default spans by kind', () => {
+  const editor = editorWithMembers();
+  editor.edit(chart => { chart.offset = -2; });
+  const placed = (kind, start, end, options) => {
+    const index = editor.place(kind, start, end, options);
+    return editor.chart.events[index];
+  };
+  assert.deepEqual(placed('mix', 1, 0, { member: 'unknown' }), { kind: 'mix', start: 0, end: 4 });
+  assert.deepEqual(placed('mix', 1, 3), { kind: 'mix', start: 0, end: 1 });
+  assert.deepEqual(placed('part', 5, NaN, { member: 'm2' }), { kind: 'part', start: 3, end: 5, members: ['m2'] });
+  assert.deepEqual(placed('call', 5, Infinity, { echo: true, member: 'm1' }), { kind: 'call', start: 3, end: 4, echo: true });
+  assert.deepEqual(placed('call', 5, 5.049, { echo: 1 }), { kind: 'call', start: 3, end: 4 });
+  assert.deepEqual(placed('note', 5, undefined, { echo: true, member: 'm1' }), { kind: 'note', start: 3, end: 4 });
+  assert.deepEqual(placed('note', 5, 5.05), { kind: 'note', start: 3, end: 3.05 });
+  editor.edit(chart => { chart.offset = 0.1; });
+  close(placed('note', 0.3, 0.35).end, 0.45);
+  close(placed('note', 0.3, 0.3499999).end, 1.4);
+});
+
+test('place caps the end and rejects invalid spans without an edit', () => {
+  const editor = new CheerEditor(newChart(songQuery, 'Fixture Maker'));
+  assert.equal(editor.place('mix', 204.95, 210), 0);
+  assert.equal(editor.chart.events[0].end, 205);
+  assert.equal(editor.place('mix', 204, '204.5'), 1);
+  assert.equal(editor.chart.events[1].end, 205);
+  editor.undo();
+  const before = editor.chart;
+  for (const args of [['mix', 204.951, 210], ['note', 205], ['note', 206], ['bad', 0, 1],
+    ['part', 0, 1], ['part', 0, 1, { member: 'unknown' }], ...[NaN, Infinity, -Infinity, '1', null].map(start => ['mix', start, 4])]) {
+    assert.equal(editor.place(...args), null);
+    assert.equal(editor.chart, before);
+    assert.equal(editor.canRedo, true);
+  }
+});
+
 test('editor keys map digits and kinds only', () => {
   assert.deepEqual(keyFor('1'), { member: 0 });
   assert.deepEqual(keyFor('9'), { member: 8 });

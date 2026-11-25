@@ -59,6 +59,22 @@ test('contributors’ text is escaped and their files are published under their 
   assert.ok(fs.existsSync(path.join(out, file)));
 });
 
+test('the home page escapes the production note on its own cheer entry', () => {
+  const song = { title: '合成曲目', artist: '合成组合', duration: 180 };
+  const withNote = chart(song, '甲');
+  withNote.credits.note = '合成<甲> & 乙';
+  const root = makeRepo({
+    'cheers/合成组合/合成曲目/a.cheer.json': withNote,
+    'cheers/合成组合/合成曲目/b.cheer.json': chart({ ...song, duration: 181 }, '乙'),
+  });
+  const out = path.join(root, '_site');
+  buildSite(root, out);
+  const home = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+  assert.match(home, /<li><span><bdi>甲<\/bdi><\/span><span class="meta">[^<]*说明：<bdi>合成&lt;甲&gt; &amp; 乙<\/bdi>/);
+  assert.equal(home.split('说明：').length - 1, 1);
+  assert.ok(!home.includes(withNote.credits.note));
+});
+
 test('pages load only this site’s own script and style, with no inline code', () => {
   const root = makeRepo({ 'cheers/合成组合/合成曲目/a.cheer.json': chart({ title: '合成曲目', artist: '合成组合', duration: 180 }, '甲') });
   const out = path.join(root, '_site');

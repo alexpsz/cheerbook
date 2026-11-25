@@ -82,7 +82,8 @@ test('pages load only this site’s own script and style, with no inline code', 
   for (const page of ['index.html', 'mix/index.html', '404.html']) {
     const html = fs.readFileSync(path.join(out, page), 'utf8');
     const scripts = html.match(/<script[^>]*>/g) || [];
-    assert.deepEqual(scripts, ['<script src="/app.js" defer>'], page);
+    assert.equal(scripts.length, 1, page);
+    assert.match(scripts[0], /^<script src="\/app\.js\?v=[0-9a-f]{10}" defer>$/, page);
     assert.doesNotMatch(html, /<style|\sstyle=|\son[a-z]+=/i, page);
     assert.doesNotMatch(html, /(src|href)="\/\/|<link[^>]+href="https?:/, page);
   }
@@ -180,8 +181,10 @@ test('the editor page loads only its own module script and stylesheet, under its
   const out = path.join(root, '_site');
   buildSite(root, out);
   const page = fs.readFileSync(path.join(out, 'editor', 'index.html'), 'utf8');
-  assert.deepEqual(page.match(/<script[^>]*>/g), ['<script type="module" src="/editor/app.js">']);
-  assert.match(page, /<link rel="stylesheet" href="\/editor\/editor.css">/);
+  const scripts = page.match(/<script[^>]*>/g);
+  assert.equal(scripts.length, 1);
+  assert.match(scripts[0], /^<script type="module" src="\/editor\/app\.js\?v=[0-9a-f]{10}">$/);
+  assert.match(page, /<link rel="stylesheet" href="\/editor\/editor\.css\?v=[0-9a-f]{10}">/);
   assert.doesNotMatch(page, /<style|\sstyle=|\son[a-z]+=/i);
   for (const file of ['app.js', 'dom.js', 'submission.js', 'analysis-worker.js', 'editor.css', 'lib.js']) assert.ok(fs.existsSync(path.join(out, 'editor', file)), file);
   assert.ok(!fs.existsSync(path.join(out, 'editor', 'page.html')));
@@ -267,4 +270,39 @@ test('the privacy page says which services are reached and links the terms YouTu
   assert.match(fs.readFileSync(path.join(out, 'index.html'), 'utf8'), /<a href="\/privacy\/">隐私说明<\/a>/);
   const editor = fs.readFileSync(path.join(out, 'editor', 'index.html'), 'utf8');
   assert.match(editor, /id="video-consent-youtube"[^>]*>[^]*?href="https:\/\/www\.youtube\.com\/t\/terms"[^]*?href="http:\/\/www\.google\.com\/policies\/privacy"[^]*?href="\/privacy\/"/);
+});
+
+test('every page and script asks for the scripts and styles of its own build, by one version', () => {
+  const root = makeRepo({});
+  const out = path.join(root, '_site');
+  buildSite(root, out);
+  const texts = ['index.html', 'mix/index.html', '404.html', 'privacy/index.html', 'editor/index.html', 'editor/mix/index.html', 'submit/index.html',
+    ...fs.readdirSync(path.join(out, 'editor')).filter(file => file.endsWith('.js')).map(file => 'editor/' + file), 'submit/embed.js']
+    .map(file => [file, fs.readFileSync(path.join(out, file), 'utf8')]);
+  const versions = new Set();
+  let named = 0;
+  for (const [file, text] of texts) {
+    // Any quoted address of one of this site's scripts or styles, with or without a version.
+    for (const [, address, version] of text.matchAll(/["'](\/(?:(?:editor|submit)\/[A-Za-z0-9._-]+|style|app)\.(?:js|css))(\?v=[0-9a-f]{10})?["']/g)) {
+      assert.ok(version, `${file} names ${address} without a version`);
+      versions.add(version);
+      named++;
+      assert.ok(fs.existsSync(path.join(out, address)), address);
+    }
+  }
+  assert.ok(named >= 12, String(named));
+  assert.equal(versions.size, 1);
+  // The scripts import each other and start the analysis worker by versioned addresses too.
+  const app = fs.readFileSync(path.join(out, 'editor', 'app.js'), 'utf8');
+  const [version] = versions;
+  for (const name of ['lib', 'dom', 'submission', 'timesource', 'youtube']) assert.ok(app.includes(`from '/editor/${name}.js${version}'`), name);
+  assert.ok(app.includes(`new Worker('/editor/analysis-worker.js${version}'`));
+  // A change to any of them is a new version; the same sources always give the same one.
+  const again = path.join(root, '_again');
+  buildSite(root, again);
+  assert.ok(fs.readFileSync(path.join(again, 'editor', 'index.html'), 'utf8').includes(version));
+  fs.appendFileSync(path.join(root, 'site', 'editor', 'dom.js'), '\n// changed\n');
+  const changed = path.join(root, '_changed');
+  buildSite(root, changed);
+  assert.ok(!fs.readFileSync(path.join(changed, 'editor', 'index.html'), 'utf8').includes(version));
 });

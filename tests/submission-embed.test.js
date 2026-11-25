@@ -168,8 +168,12 @@ test('the site serves the embedded page bare, with its own policy and no inline 
   const out = path.join(root, '_site');
   buildSite(root, out);
   const html = fs.readFileSync(path.join(out, 'submit', 'index.html'), 'utf8');
-  assert.deepEqual(html.match(/<script[^>]*>/g), ['<script src="/submit/embed.js" defer>']);
-  assert.deepEqual(html.match(/<link[^>]*>/g), ['<link rel="stylesheet" href="/submit/embed.css">']);
+  const scripts = html.match(/<script[^>]*>/g);
+  assert.equal(scripts.length, 1);
+  assert.match(scripts[0], /^<script src="\/submit\/embed\.js\?v=[0-9a-f]{10}" defer>$/);
+  const links = html.match(/<link[^>]*>/g);
+  assert.equal(links.length, 1);
+  assert.match(links[0], /^<link rel="stylesheet" href="\/submit\/embed\.css\?v=[0-9a-f]{10}">$/);
   assert.doesNotMatch(html, /<style|\sstyle=|\son[a-z]+=|<nav|<header|<footer/i);
   assert.match(html, /<meta name="robots" content="noindex">/);
   for (const file of ['embed.js', 'embed.css']) assert.ok(fs.existsSync(path.join(out, 'submit', file)), file);
